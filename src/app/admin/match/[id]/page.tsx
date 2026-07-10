@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { subscribeMatch, updateMatch, subscribeEvents, addEvent, deleteEvent, recalculateStandings, recalculateMatchScore } from "@/lib/firestore";
@@ -61,6 +61,88 @@ export default function LiveMatchPage() {
   const [offsides2, setOffsides2] = useState(0);
   const [savingStats, setSavingStats] = useState(false);
 
+  const [directScore1, setDirectScore1] = useState(0);
+  const [directScore2, setDirectScore2] = useState(0);
+  const [savingScore, setSavingScore] = useState(false);
+
+  // Timer
+  const [displaySeconds, setDisplaySeconds] = useState(0);
+  const [displayExtraSecs, setDisplayExtraSecs] = useState(0);
+  const autoPauseRef = useRef(false);
+
+  function getCurrentSeconds(m: Match): number {
+    const elapsed = m.timerElapsed ?? 0;
+    if (!m.timerStartedAt) return elapsed;
+    return elapsed + (Date.now() - m.timerStartedAt) / 1000;
+  }
+
+  useEffect(() => {
+    if (!match) return;
+    const half = (match.halfDuration ?? 0) * 60;
+
+    // Extra time interval
+    if (match.extraTimeStartedAt) {
+      const calc = () => Math.floor((Date.now() - match.extraTimeStartedAt!) / 1000);
+      setDisplayExtraSecs(calc());
+      const iv = setInterval(() => setDisplayExtraSecs(calc()), 1000);
+      return () => clearInterval(iv);
+    }
+
+    setDisplayExtraSecs(0);
+    setDisplaySeconds(getCurrentSeconds(match));
+    if (!match.timerStartedAt) return;
+
+    // Reset auto-pause guard when timer (re)starts
+    autoPauseRef.current = false;
+
+    const interval = setInterval(() => {
+      const secs = getCurrentSeconds(match);
+      setDisplaySeconds(secs);
+
+      if (half <= 0 || autoPauseRef.current) return;
+      const phase = match.timerPhase ?? "1st";
+      const threshold = phase === "1st" ? half : phase === "2nd" ? half * 2 : 0;
+      if (threshold > 0 && secs >= threshold) {
+        autoPauseRef.current = true;
+        const nextPhase = phase === "1st" ? "1st_extra" : "2nd_extra";
+        updateMatch(id, {
+          timerStartedAt: null,
+          timerElapsed: threshold,
+          timerPhase: nextPhase,
+          extraTimeStartedAt: Date.now(),
+        });
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [match?.timerStartedAt, match?.timerElapsed, match?.extraTimeStartedAt]);
+
+  async function startTimer() {
+    if (!match) return;
+    const phase = match.timerPhase ?? "1st";
+    if (phase === "1st_extra") {
+      // Start 2nd half — clear extra time, continue main timer
+      await updateMatch(id, {
+        timerStartedAt: Date.now(),
+        timerPhase: "2nd",
+        extraTimeStartedAt: null,
+      });
+    } else if (phase === "1st" || phase === "2nd") {
+      await updateMatch(id, { timerStartedAt: Date.now() });
+    }
+  }
+  async function pauseTimer() {
+    if (!match) return;
+    await updateMatch(id, { timerStartedAt: null, timerElapsed: getCurrentSeconds(match) });
+  }
+  async function resetTimer() {
+    await updateMatch(id, {
+      timerStartedAt: null,
+      timerElapsed: 0,
+      timerPhase: "1st",
+      extraTimeStartedAt: null,
+    });
+  }
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
       if (!user) router.push("/admin");
@@ -78,6 +160,8 @@ export default function LiveMatchPage() {
         setPenalty1(m.penalty1 ?? 0);
         setPenalty2(m.penalty2 ?? 0);
         setResultType(m.resultType ?? "normal");
+        setDirectScore1(m.score1);
+        setDirectScore2(m.score2);
         setShots1(m.shots1 ?? 0);
         setShots2(m.shots2 ?? 0);
         setOnTarget1(m.onTarget1 ?? 0);
@@ -107,13 +191,13 @@ export default function LiveMatchPage() {
 
   async function handleAddEvent(e: React.FormEvent) {
     e.preventDefault();
-    if (!match || !player.trim()) return;
+    if (!match) return;
     setAdding(true);
     await addEvent(id, {
       matchId: id,
       type: activeType,
       team: activeTeam,
-      player: player.trim(),
+      player: player.trim() || "-",
       ...(jerseyNumber && !isStaff ? { jerseyNumber: Number(jerseyNumber) } : {}),
       ...(activeType === "substitution" && playerOut.trim() ? { playerOut: playerOut.trim() } : {}),
       ...(activeType === "substitution" && jerseyNumberOut ? { jerseyNumberOut: Number(jerseyNumberOut) } : {}),
@@ -143,7 +227,7 @@ export default function LiveMatchPage() {
             matchId: id,
             type: "red_card",
             team: activeTeam,
-            player: player.trim(),
+            player: player.trim() || "-",
             ...(jerseyNumber && !isStaff ? { jerseyNumber: Number(jerseyNumber) } : {}),
             ...(isStaff ? { isStaff: true } : {}),
             minute,
@@ -160,6 +244,23 @@ export default function LiveMatchPage() {
     if ((activeType === "goal" || activeType === "penalty_goal" || activeType === "own_goal") && match) {
       recalculateStandings(match.tournamentId);
     }
+  }
+
+  async function handleQuickScore(team: "team1" | "team2", delta: 1 | -1) {
+    if (!match) return;
+    const s1 = team === "team1" ? Math.max(0, match.score1 + delta) : match.score1;
+    const s2 = team === "team2" ? Math.max(0, match.score2 + delta) : match.score2;
+    await updateMatch(id, { score1: s1, score2: s2 });
+    setDirectScore1(s1); setDirectScore2(s2);
+    recalculateStandings(match.tournamentId);
+  }
+
+  async function handleSaveDirectScore() {
+    if (!match) return;
+    setSavingScore(true);
+    await updateMatch(id, { score1: directScore1, score2: directScore2 });
+    await recalculateStandings(match.tournamentId);
+    setSavingScore(false);
   }
 
   async function handleSaveStats() {
@@ -201,7 +302,23 @@ export default function LiveMatchPage() {
         </div>
         <div className="flex items-center justify-between gap-4">
           <span className="text-white font-bold text-lg flex-1 text-center">{match.team1}</span>
-          <span className="text-white text-3xl font-bold tracking-widest">{match.score1} : {match.score2}</span>
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col items-center gap-1">
+              <button onClick={() => handleQuickScore("team1", 1)}
+                className="w-8 h-8 rounded bg-green-700 hover:bg-green-600 text-white font-bold text-lg leading-none transition-colors">+</button>
+              <span className="text-white text-3xl font-bold w-10 text-center">{match.score1}</span>
+              <button onClick={() => handleQuickScore("team1", -1)} disabled={match.score1 === 0}
+                className="w-8 h-8 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-30 text-white font-bold text-lg leading-none transition-colors">−</button>
+            </div>
+            <span className="text-gray-500 text-2xl font-bold">:</span>
+            <div className="flex flex-col items-center gap-1">
+              <button onClick={() => handleQuickScore("team2", 1)}
+                className="w-8 h-8 rounded bg-green-700 hover:bg-green-600 text-white font-bold text-lg leading-none transition-colors">+</button>
+              <span className="text-white text-3xl font-bold w-10 text-center">{match.score2}</span>
+              <button onClick={() => handleQuickScore("team2", -1)} disabled={match.score2 === 0}
+                className="w-8 h-8 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-30 text-white font-bold text-lg leading-none transition-colors">−</button>
+            </div>
+          </div>
           <span className="text-white font-bold text-lg flex-1 text-center">{match.team2}</span>
         </div>
         <div className="flex justify-center mt-3">
@@ -229,6 +346,96 @@ export default function LiveMatchPage() {
           ))}
         </div>
       </div>
+
+      {/* Direct Score */}
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 mb-4">
+        <p className="text-xs text-gray-400 mb-3">กรอกสกอร์ตรงๆ — ไม่ผ่าน Events</p>
+        <div className="flex items-center gap-3">
+          <div className="flex flex-col items-center flex-1 gap-1">
+            <span className="text-xs text-gray-400">{match.team1}</span>
+            <input type="number" min={0} value={directScore1}
+              onChange={(e) => setDirectScore1(Math.max(0, Number(e.target.value)))}
+              className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white text-xl font-bold text-center focus:outline-none focus:border-blue-500" />
+          </div>
+          <span className="text-gray-500 font-bold text-xl mt-4">–</span>
+          <div className="flex flex-col items-center flex-1 gap-1">
+            <span className="text-xs text-gray-400">{match.team2}</span>
+            <input type="number" min={0} value={directScore2}
+              onChange={(e) => setDirectScore2(Math.max(0, Number(e.target.value)))}
+              className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white text-xl font-bold text-center focus:outline-none focus:border-blue-500" />
+          </div>
+          <button onClick={handleSaveDirectScore} disabled={savingScore}
+            className="mt-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded px-4 py-2 text-sm font-medium transition-colors shrink-0">
+            {savingScore ? "..." : "💾 Save"}
+          </button>
+        </div>
+      </div>
+
+      {/* Timer */}
+      {(match.halfDuration ?? 0) > 0 && (() => {
+        const half = match.halfDuration!;
+        const totalMin = Math.floor(displaySeconds / 60);
+        const totalSec = Math.floor(displaySeconds % 60);
+        const phase = match.timerPhase ?? "1st";
+        const isRunning = !!match.timerStartedAt;
+        const inExtra = phase === "1st_extra" || phase === "2nd_extra";
+        const halfLabel = phase === "1st" || phase === "1st_extra" ? "ครึ่งที่ 1" : "ครึ่งที่ 2";
+        const extraMin = Math.floor(displayExtraSecs / 60);
+        const extraSec = Math.floor(displayExtraSecs % 60);
+
+        return (
+          <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 mb-4">
+            <p className="text-xs text-gray-400 mb-3">ตัวจับเวลา — ครึ่งละ {half} นาที</p>
+            <div className="flex items-center gap-4 flex-wrap">
+
+              {/* Main timer */}
+              <div className="text-center min-w-[80px]">
+                <div className="text-3xl font-mono font-bold text-white tabular-nums">
+                  {String(totalMin).padStart(2, "0")}:{String(totalSec).padStart(2, "0")}
+                </div>
+                <div className={`text-xs mt-1 font-medium ${phase === "1st" || phase === "1st_extra" ? "text-blue-400" : "text-orange-400"}`}>
+                  {halfLabel}
+                </div>
+              </div>
+
+              {/* Extra time */}
+              {inExtra && (
+                <div className="text-center border-l border-gray-600 pl-4 min-w-[80px]">
+                  <div className="text-2xl font-mono font-bold text-yellow-400 tabular-nums">
+                    {String(extraMin).padStart(2, "0")}:{String(extraSec).padStart(2, "0")}
+                  </div>
+                  <div className="text-xs mt-1 font-medium text-yellow-500">ทดเวลา</div>
+                </div>
+              )}
+
+              {/* Controls */}
+              <div className="flex gap-2 flex-1">
+                {phase === "2nd_extra" ? (
+                  <span className="flex-1 text-center text-sm text-gray-400 py-2">
+                    ครบเวลา — กดจบแมตช์ด้านล่าง
+                  </span>
+                ) : !isRunning ? (
+                  <button onClick={startTimer}
+                    className={`flex-1 text-white rounded px-3 py-2 text-sm font-medium transition-colors ${
+                      phase === "1st_extra" ? "bg-orange-600 hover:bg-orange-700" : "bg-green-600 hover:bg-green-700"
+                    }`}>
+                    {phase === "1st_extra" ? "▶ เริ่มครึ่งที่ 2" : "▶ Start"}
+                  </button>
+                ) : (
+                  <button onClick={pauseTimer}
+                    className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded px-3 py-2 text-sm font-medium transition-colors">
+                    ⏸ Pause
+                  </button>
+                )}
+                <button onClick={resetTimer}
+                  className="bg-gray-700 hover:bg-gray-600 text-white rounded px-3 py-2 text-sm transition-colors">
+                  ↺ Reset
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Add Event */}
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 mb-4">
@@ -269,7 +476,7 @@ export default function LiveMatchPage() {
           <div className="flex gap-2">
             <input
               placeholder={isStaff ? "ชื่อโค้ช / ผู้ช่วย" : activeType === "substitution" ? "ชื่อนักเตะ (in)" : activeType === "own_goal" ? "ชื่อนักเตะ (ผู้ทำเข้าตัวเอง)" : "ชื่อนักเตะ"}
-              value={player} onChange={(e) => setPlayer(e.target.value)} required
+              value={player} onChange={(e) => setPlayer(e.target.value)}
               className="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
             {!isStaff && (
             <input type="number" min={1} max={99} value={jerseyNumber} onChange={(e) => setJerseyNumber(e.target.value)}
@@ -279,6 +486,13 @@ export default function LiveMatchPage() {
             <input type="text" value={minute} onChange={(e) => setMinute(e.target.value)}
               placeholder="90+1"
               className="w-20 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+            {(match.halfDuration ?? 0) > 0 && (
+              <button type="button" title="ใช้นาทีปัจจุบัน"
+                onClick={() => setMinute(String(Math.floor(displaySeconds / 60) + 1))}
+                className="bg-gray-700 hover:bg-gray-600 text-white px-2 py-2 rounded text-sm transition-colors">
+                ⏱
+              </button>
+            )}
           </div>
           {activeType === "substitution" && (
             <div className="flex gap-2">
@@ -310,15 +524,15 @@ export default function LiveMatchPage() {
             { label: "Fouls", v1: fouls1, v2: fouls2, s1: setFouls1, s2: setFouls2 },
             { label: "Offsides", v1: offsides1, v2: offsides2, s1: setOffsides1, s2: setOffsides2 },
           ].map(({ label, v1, v2, s1, s2 }) => (
-            <>
-              <input key={label + "1"} type="number" min={0} value={v1}
+            <Fragment key={label}>
+              <input type="number" min={0} value={v1}
                 onChange={(e) => s1(Number(e.target.value))}
                 className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white text-center text-sm focus:outline-none focus:border-blue-500" />
               <span className="text-center text-xs text-gray-500 whitespace-nowrap">{label}</span>
-              <input key={label + "2"} type="number" min={0} value={v2}
+              <input type="number" min={0} value={v2}
                 onChange={(e) => s2(Number(e.target.value))}
                 className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white text-center text-sm focus:outline-none focus:border-blue-500" />
-            </>
+            </Fragment>
           ))}
           {/* Auto-calculated from events */}
           {[
@@ -328,11 +542,11 @@ export default function LiveMatchPage() {
             const c1 = events.filter(e => e.type === type && e.team === "team1").length;
             const c2 = events.filter(e => e.type === type && e.team === "team2").length;
             return (
-              <>
-                <div key={type + "1"} className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white text-center text-sm">{c1}</div>
-                <span key={type} className={`text-center text-xs whitespace-nowrap ${color}`}>{label}</span>
-                <div key={type + "2"} className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white text-center text-sm">{c2}</div>
-              </>
+              <Fragment key={type}>
+                <div className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white text-center text-sm">{c1}</div>
+                <span className={`text-center text-xs whitespace-nowrap ${color}`}>{label}</span>
+                <div className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white text-center text-sm">{c2}</div>
+              </Fragment>
             );
           })}
         </div>

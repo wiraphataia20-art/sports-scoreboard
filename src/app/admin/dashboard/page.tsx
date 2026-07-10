@@ -27,6 +27,8 @@ export default function AdminDashboard() {
   const [tName, setTName] = useState("");
   const [tSport, setTSport] = useState<SportType>("football");
   const [tYear, setTYear] = useState(new Date().getFullYear());
+  const [tStartDate, setTStartDate] = useState("");
+  const [tHalfDuration, setTHalfDuration] = useState(45);
   const [tWin, setTWin] = useState(3);
   const [tDraw, setTDraw] = useState(1);
   const [tLoss, setTLoss] = useState(0);
@@ -77,10 +79,12 @@ export default function AdminDashboard() {
     e.preventDefault();
     await addTournament({
       name: tName, sport: tSport, year: tYear,
+      ...(tStartDate ? { startDate: tStartDate } : {}),
+      halfDuration: tHalfDuration,
       winPoints: tWin, drawPoints: tDraw, lossPoints: tLoss,
       penaltyWinPoints: tPenWin, penaltyLossPoints: tPenLoss,
     });
-    setTName("");
+    setTName(""); setTStartDate("");
     const data = await getTournaments();
     setTournaments(data);
     setSelectedId(data[0]?.id ?? "");
@@ -125,6 +129,7 @@ export default function AdminDashboard() {
         score1: 0, score2: 0,
         status: "upcoming",
         date: mDate, time: mTime, field: mField, round: mRound,
+        ...(tournament.halfDuration ? { halfDuration: tournament.halfDuration } : {}),
       });
       setMTeam1Id(""); setMTeam2Id(""); setMDate(""); setMTime(""); setMField(""); setMRound("");
     } catch (err) {
@@ -198,6 +203,15 @@ export default function AdminDashboard() {
                 <option value="volleyball">วอลเลย์บอล</option>
               </select>
               <input type="number" value={tYear} onChange={(e) => setTYear(Number(e.target.value))} className={`${inputCls} w-20`} />
+            </div>
+            <input type="date" value={tStartDate} onChange={(e) => setTStartDate(e.target.value)}
+              className={inputCls} />
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-gray-400 shrink-0">นาที/ครึ่ง</label>
+              <input type="number" min={0} max={90} value={tHalfDuration}
+                onChange={(e) => setTHalfDuration(Number(e.target.value))}
+                className={`${inputCls} w-20`} />
+              <span className="text-xs text-gray-500">(0 = ไม่มีตัวจับเวลา)</span>
             </div>
             <p className="text-xs text-gray-400">กฎแต้ม</p>
             <div className="grid grid-cols-3 gap-1.5">

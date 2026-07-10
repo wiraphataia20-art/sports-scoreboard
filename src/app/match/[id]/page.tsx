@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { getMatch, subscribeEvents } from "@/lib/firestore";
+import { subscribeMatch, subscribeEvents } from "@/lib/firestore";
 import type { Match, MatchEvent } from "@/types";
 
 const EVENT_ICON: Record<string, string> = {
@@ -64,15 +64,39 @@ export default function MatchDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [match, setMatch] = useState<Match | null>(null);
   const [events, setEvents] = useState<MatchEvent[]>([]);
+  const [displaySeconds, setDisplaySeconds] = useState(0);
+  const [extraSeconds, setExtraSeconds] = useState(0);
 
   useEffect(() => {
-    getMatch(id).then(setMatch);
+    return subscribeMatch(id, (m) => { if (m) setMatch(m); });
   }, [id]);
 
   useEffect(() => {
     const unsub = subscribeEvents(id, setEvents);
     return () => unsub();
   }, [id]);
+
+  useEffect(() => {
+    if (!match) return;
+
+    if (match.extraTimeStartedAt) {
+      const calc = () => Math.floor((Date.now() - match.extraTimeStartedAt!) / 1000);
+      setDisplaySeconds(match.timerElapsed ?? 0);
+      setExtraSeconds(calc());
+      const iv = setInterval(() => setExtraSeconds(calc()), 1000);
+      return () => clearInterval(iv);
+    }
+
+    setExtraSeconds(0);
+    const elapsed = match.timerElapsed ?? 0;
+    const calc = () => match.timerStartedAt
+      ? elapsed + (Date.now() - match.timerStartedAt) / 1000
+      : elapsed;
+    setDisplaySeconds(calc());
+    if (!match.timerStartedAt) return;
+    const interval = setInterval(() => setDisplaySeconds(calc()), 1000);
+    return () => clearInterval(interval);
+  }, [match?.timerStartedAt, match?.timerElapsed, match?.extraTimeStartedAt]);
 
   if (!match) return <p className="text-gray-500">กำลังโหลด...</p>;
 
@@ -120,6 +144,34 @@ export default function MatchDetailPage() {
           </div>
         </div>
 
+        {match.status === "live" && (match.halfDuration ?? 0) > 0 && (() => {
+          const phase = match.timerPhase ?? "1st";
+          const totalMin = Math.floor(displaySeconds / 60);
+          const totalSec = Math.floor(displaySeconds % 60);
+          const inExtra = phase === "1st_extra" || phase === "2nd_extra";
+          const halfLabel = phase === "1st" || phase === "1st_extra" ? "1st Half" : "2nd Half";
+          const halfColor = phase === "1st" || phase === "1st_extra" ? "bg-blue-900 text-blue-300" : "bg-orange-900 text-orange-300";
+          const extraMin = Math.floor(extraSeconds / 60);
+          const extraSec = Math.floor(extraSeconds % 60);
+          return (
+            <div className="flex justify-center items-center gap-3 mt-3 flex-wrap">
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded ${halfColor}`}>
+                {halfLabel}
+              </span>
+              <span className="text-white font-mono font-bold text-lg tabular-nums">
+                {String(totalMin).padStart(2, "0")}:{String(totalSec).padStart(2, "0")}
+              </span>
+              {inExtra && (
+                <>
+                  <span className="text-yellow-400 text-xs font-semibold">+</span>
+                  <span className="text-yellow-400 font-mono font-bold text-lg tabular-nums">
+                    {String(extraMin).padStart(2, "0")}:{String(extraSec).padStart(2, "0")}
+                  </span>
+                </>
+              )}
+            </div>
+          );
+        })()}
         <div className="flex justify-center gap-6 mt-4 text-xs text-gray-500">
           <span>{match.date}</span>
           <span>{match.time}</span>
@@ -171,11 +223,11 @@ export default function MatchDetailPage() {
               {rows.map(({ label, v1, v2, highlight }) => {
                 const labelColor = highlight === "yellow" ? "text-yellow-400" : highlight === "red" ? "text-red-400" : "text-gray-500";
                 return (
-                  <>
-                    <div key={label + "1"} className="text-center font-bold text-white">{v1}</div>
-                    <div key={label} className={`text-center text-xs ${labelColor} whitespace-nowrap`}>{label}</div>
-                    <div key={label + "2"} className="text-center font-bold text-white">{v2}</div>
-                  </>
+                  <Fragment key={label}>
+                    <div className="text-center font-bold text-white">{v1}</div>
+                    <div className={`text-center text-xs ${labelColor} whitespace-nowrap`}>{label}</div>
+                    <div className="text-center font-bold text-white">{v2}</div>
+                  </Fragment>
                 );
               })}
             </div>

@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navLinks = [
-  { href: "/", label: "ตารางแข่งขัน" },
-  { href: "/standings", label: "ตาราง Standings" },
-  { href: "/admin", label: "ผู้ดูแล" },
+  { href: "/", label: "Schedule" },
+  { href: "/standings", label: "Standings" },
+  { href: "/admin", label: "Admin" },
 ];
 
 export default function Navbar() {

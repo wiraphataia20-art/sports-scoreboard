@@ -39,7 +39,9 @@ export default function HomePage() {
     return () => unsub();
   }, [selectedTournamentId]);
 
-  const matchesByDate = matches.reduce<Record<string, Match[]>>((acc, m) => {
+  const liveMatches = matches.filter((m) => m.status === "live");
+  const otherMatches = matches.filter((m) => m.status !== "live");
+  const matchesByDate = otherMatches.reduce<Record<string, Match[]>>((acc, m) => {
     acc[m.date] = acc[m.date] ? [...acc[m.date], m] : [m];
     return acc;
   }, {});
@@ -87,23 +89,38 @@ export default function HomePage() {
         <p className="text-gray-500">กำลังโหลด...</p>
       ) : !selectedTournamentId ? (
         <p className="text-gray-500">ยังไม่มีรายการแข่งขัน</p>
-      ) : Object.keys(matchesByDate).length === 0 ? (
+      ) : matches.length === 0 ? (
         <p className="text-gray-500">ยังไม่มีแมตช์ในรายการนี้</p>
       ) : (
-        Object.entries(matchesByDate)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([date, dayMatches]) => (
-            <div key={date} className="mb-6">
-              <h2 className="text-lg font-semibold text-gray-300 mb-3">
-                วันที่ {date}
+        <>
+          {liveMatches.length > 0 && (
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                กำลังแข่ง
               </h2>
               <div className="flex flex-col gap-3">
-                {dayMatches.map((m) => (
+                {liveMatches.map((m) => (
                   <MatchCard key={m.id} match={m} />
                 ))}
               </div>
             </div>
-          ))
+          )}
+          {Object.entries(matchesByDate)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([date, dayMatches]) => (
+              <div key={date} className="mb-6">
+                <h2 className="text-lg font-semibold text-gray-300 mb-3">
+                  วันที่ {date}
+                </h2>
+                <div className="flex flex-col gap-3">
+                  {dayMatches.map((m) => (
+                    <MatchCard key={m.id} match={m} />
+                  ))}
+                </div>
+              </div>
+            ))}
+        </>
       )}
     </div>
   );

@@ -33,7 +33,13 @@ export async function getTournaments(sport?: string): Promise<Tournament[]> {
   const ref = collection(db, "tournaments");
   const q = sport ? query(ref, where("sport", "==", sport)) : query(ref);
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Tournament));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() } as Tournament))
+    .sort((a, b) => {
+      const da = a.startDate ?? String(a.year);
+      const db2 = b.startDate ?? String(b.year);
+      return db2.localeCompare(da);
+    });
 }
 
 export async function getTournament(id: string): Promise<Tournament | null> {

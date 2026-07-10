@@ -13,6 +13,8 @@ export interface Tournament {
   name: string;
   sport: SportType;
   year: number;
+  startDate?: string;
+  halfDuration?: number;
   winPoints: number;
   drawPoints: number;
   lossPoints: number;
@@ -40,6 +42,12 @@ export interface Match {
   time: string;
   field: string;
   round: string;
+  // Timer
+  halfDuration?: number;
+  timerElapsed?: number;
+  timerStartedAt?: number | null;
+  timerPhase?: "1st" | "1st_extra" | "2nd" | "2nd_extra";
+  extraTimeStartedAt?: number | null;
   // Match Stats
   shots1?: number;
   shots2?: number;
