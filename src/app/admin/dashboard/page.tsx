@@ -27,7 +27,9 @@ export default function AdminDashboard() {
   const [tName, setTName] = useState("");
   const [tSport, setTSport] = useState<SportType>("football");
   const [tYear, setTYear] = useState(new Date().getFullYear());
+  const [tEventName, setTEventName] = useState("");
   const [tStartDate, setTStartDate] = useState("");
+  const [tGender, setTGender] = useState<"ชาย" | "หญิง" | "">("");
   const [tHalfDuration, setTHalfDuration] = useState(45);
   const [tWin, setTWin] = useState(3);
   const [tDraw, setTDraw] = useState(1);
@@ -79,12 +81,14 @@ export default function AdminDashboard() {
     e.preventDefault();
     await addTournament({
       name: tName, sport: tSport, year: tYear,
+      ...(tEventName.trim() ? { eventName: tEventName.trim() } : {}),
       ...(tStartDate ? { startDate: tStartDate } : {}),
+      ...(tGender ? { gender: tGender } : {}),
       halfDuration: tHalfDuration,
       winPoints: tWin, drawPoints: tDraw, lossPoints: tLoss,
       penaltyWinPoints: tPenWin, penaltyLossPoints: tPenLoss,
     });
-    setTName(""); setTStartDate("");
+    setTName(""); setTEventName(""); setTStartDate(""); setTGender("");
     const data = await getTournaments();
     setTournaments(data);
     setSelectedId(data[0]?.id ?? "");
@@ -163,7 +167,7 @@ export default function AdminDashboard() {
             className={`${inputCls} flex-1 min-w-48`}>
             {tournaments.length === 0 && <option value="">-- ยังไม่มีรายการ --</option>}
             {tournaments.map((t) => (
-              <option key={t.id} value={t.id}>{t.name} ({t.year}) — {t.sport}</option>
+              <option key={t.id} value={t.id}>{t.name} ({t.year}) — {t.sport}{t.gender ? ` ${t.gender}` : ""}</option>
             ))}
           </select>
           {selectedTournament && (
@@ -203,6 +207,20 @@ export default function AdminDashboard() {
                 <option value="volleyball">วอลเลย์บอล</option>
               </select>
               <input type="number" value={tYear} onChange={(e) => setTYear(Number(e.target.value))} className={`${inputCls} w-20`} />
+            </div>
+            <div className="flex gap-2">
+              {(["", "ชาย", "หญิง"] as const).map((g) => (
+                <button key={g} type="button" onClick={() => setTGender(g as typeof tGender)}
+                  className={`flex-1 py-1.5 rounded text-sm font-medium transition-colors border ${
+                    tGender === g
+                      ? g === "ชาย" ? "bg-blue-600 border-blue-600 text-white"
+                        : g === "หญิง" ? "bg-pink-600 border-pink-600 text-white"
+                        : "bg-gray-600 border-gray-600 text-white"
+                      : "bg-gray-900 border-gray-700 text-gray-400 hover:bg-gray-700"
+                  }`}>
+                  {g === "" ? "ไม่ระบุเพศ" : g}
+                </button>
+              ))}
             </div>
             <input type="date" value={tStartDate} onChange={(e) => setTStartDate(e.target.value)}
               className={inputCls} />

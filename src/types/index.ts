@@ -14,6 +14,8 @@ export interface Tournament {
   sport: SportType;
   year: number;
   startDate?: string;
+  eventName?: string;
+  gender?: "ชาย" | "หญิง";
   halfDuration?: number;
   winPoints: number;
   drawPoints: number;
@@ -48,6 +50,7 @@ export interface Match {
   timerStartedAt?: number | null;
   timerPhase?: "1st" | "1st_extra" | "2nd" | "2nd_extra";
   extraTimeStartedAt?: number | null;
+  extraTimeElapsed?: number;
   // Match Stats
   shots1?: number;
   shots2?: number;

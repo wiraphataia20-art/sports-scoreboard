@@ -1,43 +1,71 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { getTournaments, subscribeMatches } from "@/lib/firestore";
-import type { Tournament, Match, SportType } from "@/types";
+import type { Tournament, Match } from "@/types";
 import MatchCard from "@/components/MatchCard";
 
-const SPORTS: { value: SportType | "all"; label: string }[] = [
-  { value: "all", label: "ทุกกีฬา" },
-  { value: "football", label: "ฟุตบอล" },
-  { value: "futsal", label: "ฟุตซอล" },
-  { value: "basketball", label: "บาสเกตบอล" },
-  { value: "volleyball", label: "วอลเลย์บอล" },
-];
+const SPORT_LABEL: Record<string, string> = {
+  football: "ฟุตบอล",
+  futsal: "ฟุตซอล",
+  basketball: "บาสเกตบอล",
+  volleyball: "วอลเลย์บอล",
+};
 
 export default function HomePage() {
-  const [selectedSport, setSelectedSport] = useState<SportType | "all">("all");
-  const [tournaments, setTournaments] = useState<Tournament[]>([]);
-  const [selectedTournamentId, setSelectedTournamentId] = useState<string>("");
+  const [allTournaments, setAllTournaments] = useState<Tournament[]>([]);
+  const [selectedEventKey, setSelectedEventKey] = useState<string>("");
+  const [selectedSubId, setSelectedSubId] = useState<string>("");
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getTournaments(selectedSport === "all" ? undefined : selectedSport).then(
-      (data) => {
-        setTournaments(data);
-        setSelectedTournamentId(data[0]?.id ?? "");
-        setLoading(false);
+    getTournaments().then((data) => {
+      setAllTournaments(data);
+      setLoading(false);
+      if (data.length > 0) setSelectedEventKey(data[0].eventName || `${data[0].name}__${data[0].year}`);
+    });
+  }, []);
+
+  const getEventKey = (t: Tournament) => t.eventName || `${t.name}__${t.year}`;
+
+  // unique event list
+  const eventList = useMemo(() => {
+    const seen = new Set<string>();
+    const result: { key: string; label: string }[] = [];
+    for (const t of allTournaments) {
+      const key = getEventKey(t);
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push({ key, label: `${t.name} (${t.year})` });
       }
-    );
-  }, [selectedSport]);
+    }
+    return result;
+  }, [allTournaments]);
+
+  // sub-options (id + label) for selected event
+  const subOptions = useMemo(() =>
+    allTournaments
+      .filter((t) => getEventKey(t) === selectedEventKey)
+      .map((t) => ({
+        id: t.id,
+        label: `${SPORT_LABEL[t.sport] ?? t.sport}${t.gender ? ` (${t.gender})` : ""}`,
+      })),
+  [selectedEventKey, allTournaments]);
+
+  // auto-select first option when event changes
+  useEffect(() => {
+    setSelectedSubId(subOptions[0]?.id ?? "");
+  }, [selectedEventKey]);
+
+  // resolve tournament id
+  const activeTournamentId = subOptions.length === 1 ? subOptions[0].id : selectedSubId;
 
   useEffect(() => {
-    if (!selectedTournamentId) {
-      setMatches([]);
-      return;
-    }
-    const unsub = subscribeMatches(selectedTournamentId, setMatches);
+    if (!activeTournamentId) { setMatches([]); return; }
+    const unsub = subscribeMatches(activeTournamentId, setMatches);
     return () => unsub();
-  }, [selectedTournamentId]);
+  }, [activeTournamentId]);
 
   const liveMatches = matches.filter((m) => m.status === "live");
   const otherMatches = matches.filter((m) => m.status !== "live");
@@ -52,42 +80,38 @@ export default function HomePage() {
 
       <div className="flex flex-wrap gap-3 mb-6">
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-gray-400">ชนิดกีฬา</label>
+          <label className="text-xs text-gray-400">รายการแข่ง</label>
           <select
-            value={selectedSport}
-            onChange={(e) => setSelectedSport(e.target.value as SportType | "all")}
-            className="bg-gray-800 border border-gray-700 text-white rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
+            value={selectedEventKey}
+            onChange={(e) => setSelectedEventKey(e.target.value)}
+            className="bg-gray-800 border border-gray-700 text-white rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500 min-w-52"
           >
-            {SPORTS.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
+            {eventList.length === 0 && <option value="">-- ไม่มีรายการ --</option>}
+            {eventList.map((ev) => (
+              <option key={ev.key} value={ev.key}>{ev.label}</option>
             ))}
           </select>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-gray-400">รายการแข่ง</label>
-          <select
-            value={selectedTournamentId}
-            onChange={(e) => setSelectedTournamentId(e.target.value)}
-            className="bg-gray-800 border border-gray-700 text-white rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500 min-w-52"
-          >
-            {tournaments.length === 0 && (
-              <option value="">-- ไม่มีรายการ --</option>
-            )}
-            {tournaments.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name} ({t.year})
-              </option>
-            ))}
-          </select>
-        </div>
+        {subOptions.length > 1 && (
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-gray-400">ชนิดกีฬา</label>
+            <select
+              value={selectedSubId}
+              onChange={(e) => setSelectedSubId(e.target.value)}
+              className="bg-gray-800 border border-gray-700 text-white rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
+            >
+              {subOptions.map((o) => (
+                <option key={o.id} value={o.id}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {loading ? (
         <p className="text-gray-500">กำลังโหลด...</p>
-      ) : !selectedTournamentId ? (
+      ) : !activeTournamentId ? (
         <p className="text-gray-500">ยังไม่มีรายการแข่งขัน</p>
       ) : matches.length === 0 ? (
         <p className="text-gray-500">ยังไม่มีแมตช์ในรายการนี้</p>

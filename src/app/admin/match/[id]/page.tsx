@@ -81,10 +81,16 @@ export default function LiveMatchPage() {
     const half = (match.halfDuration ?? 0) * 60;
 
     // Extra time interval
-    if (match.extraTimeStartedAt) {
-      const calc = () => Math.floor((Date.now() - match.extraTimeStartedAt!) / 1000);
-      setDisplayExtraSecs(calc());
-      const iv = setInterval(() => setDisplayExtraSecs(calc()), 1000);
+    if (match.extraTimeStartedAt || (match.extraTimeElapsed ?? 0) > 0) {
+      const calcExtra = () => {
+        const base = match.extraTimeElapsed ?? 0;
+        return match.extraTimeStartedAt
+          ? base + (Date.now() - match.extraTimeStartedAt) / 1000
+          : base;
+      };
+      setDisplayExtraSecs(calcExtra());
+      if (!match.extraTimeStartedAt) return;
+      const iv = setInterval(() => setDisplayExtraSecs(calcExtra()), 1000);
       return () => clearInterval(iv);
     }
 
@@ -110,6 +116,7 @@ export default function LiveMatchPage() {
           timerElapsed: threshold,
           timerPhase: nextPhase,
           extraTimeStartedAt: Date.now(),
+          extraTimeElapsed: 0,
         });
       }
     }, 1000);
@@ -120,15 +127,26 @@ export default function LiveMatchPage() {
     if (!match) return;
     const phase = match.timerPhase ?? "1st";
     if (phase === "1st_extra") {
-      // Start 2nd half — clear extra time, continue main timer
+      // Start 2nd half — reset extra time to 0, continue main timer
       await updateMatch(id, {
         timerStartedAt: Date.now(),
         timerPhase: "2nd",
         extraTimeStartedAt: null,
+        extraTimeElapsed: 0,
       });
     } else if (phase === "1st" || phase === "2nd") {
       await updateMatch(id, { timerStartedAt: Date.now() });
     }
+  }
+
+  async function pauseExtraTime() {
+    if (!match?.extraTimeStartedAt) return;
+    const elapsed = (match.extraTimeElapsed ?? 0) + (Date.now() - match.extraTimeStartedAt) / 1000;
+    await updateMatch(id, { extraTimeStartedAt: null, extraTimeElapsed: elapsed });
+  }
+
+  async function resumeExtraTime() {
+    await updateMatch(id, { extraTimeStartedAt: Date.now() });
   }
   async function pauseTimer() {
     if (!match) return;
@@ -405,6 +423,19 @@ export default function LiveMatchPage() {
                     {String(extraMin).padStart(2, "0")}:{String(extraSec).padStart(2, "0")}
                   </div>
                   <div className="text-xs mt-1 font-medium text-yellow-500">ทดเวลา</div>
+                  <div className="mt-2">
+                    {match.extraTimeStartedAt ? (
+                      <button onClick={pauseExtraTime}
+                        className="text-xs bg-yellow-700 hover:bg-yellow-600 text-white px-2 py-1 rounded transition-colors">
+                        ⏸ หยุดทด
+                      </button>
+                    ) : (
+                      <button onClick={resumeExtraTime}
+                        className="text-xs bg-yellow-600 hover:bg-yellow-500 text-white px-2 py-1 rounded transition-colors">
+                        ▶ ต่อทด
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 

@@ -79,11 +79,17 @@ export default function MatchDetailPage() {
   useEffect(() => {
     if (!match) return;
 
-    if (match.extraTimeStartedAt) {
-      const calc = () => Math.floor((Date.now() - match.extraTimeStartedAt!) / 1000);
+    if (match.extraTimeStartedAt || (match.extraTimeElapsed ?? 0) > 0) {
+      const calcExtra = () => {
+        const base = match.extraTimeElapsed ?? 0;
+        return match.extraTimeStartedAt
+          ? base + (Date.now() - match.extraTimeStartedAt) / 1000
+          : base;
+      };
       setDisplaySeconds(match.timerElapsed ?? 0);
-      setExtraSeconds(calc());
-      const iv = setInterval(() => setExtraSeconds(calc()), 1000);
+      setExtraSeconds(calcExtra());
+      if (!match.extraTimeStartedAt) return;
+      const iv = setInterval(() => setExtraSeconds(calcExtra()), 1000);
       return () => clearInterval(iv);
     }
 
@@ -146,29 +152,40 @@ export default function MatchDetailPage() {
 
         {match.status === "live" && (match.halfDuration ?? 0) > 0 && (() => {
           const phase = match.timerPhase ?? "1st";
+          const isHalfTime = phase === "1st_extra" && !match.extraTimeStartedAt;
           const totalMin = Math.floor(displaySeconds / 60);
           const totalSec = Math.floor(displaySeconds % 60);
-          const inExtra = phase === "1st_extra" || phase === "2nd_extra";
+          const inExtra = (phase === "1st_extra" || phase === "2nd_extra") && !isHalfTime;
           const halfLabel = phase === "1st" || phase === "1st_extra" ? "1st Half" : "2nd Half";
           const halfColor = phase === "1st" || phase === "1st_extra" ? "bg-blue-900 text-blue-300" : "bg-orange-900 text-orange-300";
           const extraMin = Math.floor(extraSeconds / 60);
           const extraSec = Math.floor(extraSeconds % 60);
+
+          if (isHalfTime) {
+            return (
+              <div className="flex flex-col items-center gap-1 mt-3">
+                <span className="text-sm font-bold px-4 py-1 rounded bg-gray-600 text-white tracking-widest">
+                  HALF TIME
+                </span>
+              </div>
+            );
+          }
+
           return (
-            <div className="flex justify-center items-center gap-3 mt-3 flex-wrap">
+            <div className="flex flex-col items-center gap-1 mt-3">
               <span className={`text-xs font-semibold px-2 py-0.5 rounded ${halfColor}`}>
                 {halfLabel}
               </span>
-              <span className="text-white font-mono font-bold text-lg tabular-nums">
-                {String(totalMin).padStart(2, "0")}:{String(totalSec).padStart(2, "0")}
-              </span>
-              {inExtra && (
-                <>
-                  <span className="text-yellow-400 text-xs font-semibold">+</span>
+              <div className="flex items-center gap-2">
+                <span className="text-white font-mono font-bold text-lg tabular-nums">
+                  {String(totalMin).padStart(2, "0")}:{String(totalSec).padStart(2, "0")}
+                </span>
+                {inExtra && (
                   <span className="text-yellow-400 font-mono font-bold text-lg tabular-nums">
-                    {String(extraMin).padStart(2, "0")}:{String(extraSec).padStart(2, "0")}
+                    +{String(extraMin).padStart(2, "0")}:{String(extraSec).padStart(2, "0")}
                   </span>
-                </>
-              )}
+                )}
+              </div>
             </div>
           );
         })()}

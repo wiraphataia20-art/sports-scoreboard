@@ -1,14 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { getTournaments, subscribeStandings, getTournamentTopStats } from "@/lib/firestore";
 import type { PlayerStat } from "@/lib/firestore";
 import type { Tournament, Standing } from "@/types";
 import StandingsTable from "@/components/StandingsTable";
 
+const SPORT_LABEL: Record<string, string> = {
+  football: "ฟุตบอล",
+  futsal: "ฟุตซอล",
+  basketball: "บาสเกตบอล",
+  volleyball: "วอลเลย์บอล",
+};
+
+const getEventKey = (t: Tournament) => t.eventName || `${t.name}__${t.year}`;
+
 export default function StandingsPage() {
-  const [tournaments, setTournaments] = useState<Tournament[]>([]);
-  const [selectedTournamentId, setSelectedTournamentId] = useState<string>("");
+  const [allTournaments, setAllTournaments] = useState<Tournament[]>([]);
+  const [selectedEventKey, setSelectedEventKey] = useState<string>("");
+  const [selectedSubId, setSelectedSubId] = useState<string>("");
   const [standings, setStandings] = useState<Standing[]>([]);
   const [topStats, setTopStats] = useState<{
     topScorers: PlayerStat[];
@@ -18,10 +28,38 @@ export default function StandingsPage() {
 
   useEffect(() => {
     getTournaments().then((data) => {
-      setTournaments(data);
-      setSelectedTournamentId(data[0]?.id ?? "");
+      setAllTournaments(data);
+      if (data[0]) setSelectedEventKey(data[0].eventName || `${data[0].name}__${data[0].year}`);
     });
   }, []);
+
+  const eventList = useMemo(() => {
+    const seen = new Set<string>();
+    const result: { key: string; label: string }[] = [];
+    for (const t of allTournaments) {
+      const key = getEventKey(t);
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push({ key, label: `${t.name} (${t.year})` });
+      }
+    }
+    return result;
+  }, [allTournaments]);
+
+  const subOptions = useMemo(() =>
+    allTournaments
+      .filter((t) => getEventKey(t) === selectedEventKey)
+      .map((t) => ({
+        id: t.id,
+        label: `${SPORT_LABEL[t.sport] ?? t.sport}${t.gender ? ` (${t.gender})` : ""}`,
+      })),
+  [selectedEventKey, allTournaments]);
+
+  useEffect(() => {
+    setSelectedSubId(subOptions[0]?.id ?? "");
+  }, [selectedEventKey]);
+
+  const selectedTournamentId = subOptions.length === 1 ? subOptions[0].id : selectedSubId;
 
   useEffect(() => {
     if (!selectedTournamentId) { setStandings([]); setTopStats(null); return; }
@@ -41,21 +79,35 @@ export default function StandingsPage() {
     return acc;
   }, {});
 
-  const selectedTournament = tournaments.find((t) => t.id === selectedTournamentId);
+  const selectedTournament = allTournaments.find((t) => t.id === selectedTournamentId);
 
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">ตาราง Standings</h1>
 
-      <div className="flex flex-col gap-1 mb-6 max-w-xs">
-        <label className="text-xs text-gray-400">รายการแข่ง</label>
-        <select value={selectedTournamentId} onChange={(e) => setSelectedTournamentId(e.target.value)}
-          className="bg-gray-800 border border-gray-700 text-white rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500">
-          {tournaments.length === 0 && <option value="">-- ไม่มีรายการ --</option>}
-          {tournaments.map((t) => (
-            <option key={t.id} value={t.id}>{t.name} ({t.year})</option>
-          ))}
-        </select>
+      <div className="flex flex-wrap gap-3 mb-6">
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-gray-400">รายการแข่ง</label>
+          <select value={selectedEventKey} onChange={(e) => setSelectedEventKey(e.target.value)}
+            className="bg-gray-800 border border-gray-700 text-white rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500 min-w-52">
+            {eventList.length === 0 && <option value="">-- ไม่มีรายการ --</option>}
+            {eventList.map((ev) => (
+              <option key={ev.key} value={ev.key}>{ev.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {subOptions.length > 1 && (
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-gray-400">ชนิดกีฬา</label>
+            <select value={selectedSubId} onChange={(e) => setSelectedSubId(e.target.value)}
+              className="bg-gray-800 border border-gray-700 text-white rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500">
+              {subOptions.map((o) => (
+                <option key={o.id} value={o.id}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Scoring rules info */}
