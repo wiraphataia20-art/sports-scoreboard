@@ -89,6 +89,29 @@ export async function getMatch(id: string): Promise<Match | null> {
   return { id: snap.id, ...snap.data() } as Match;
 }
 
+export function subscribeMatch(
+  id: string,
+  callback: (match: Match | null) => void
+): Unsubscribe {
+  return onSnapshot(doc(db, "matches", id), (snap) => {
+    callback(snap.exists() ? ({ id: snap.id, ...snap.data() } as Match) : null);
+  });
+}
+
+export async function recalculateMatchScore(matchId: string): Promise<void> {
+  const eventsSnap = await getDocs(collection(db, "matches", matchId, "events"));
+  let score1 = 0, score2 = 0;
+  for (const d of eventsSnap.docs) {
+    const ev = d.data() as MatchEvent;
+    if (ev.type === "goal" || ev.type === "penalty_goal") {
+      ev.team === "team1" ? score1++ : score2++;
+    } else if (ev.type === "own_goal") {
+      ev.team === "team1" ? score2++ : score1++;
+    }
+  }
+  await updateDoc(doc(db, "matches", matchId), { score1, score2 });
+}
+
 export async function addMatch(data: Omit<Match, "id">) {
   const cleaned = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
   return addDoc(collection(db, "matches"), cleaned);
@@ -121,18 +144,8 @@ export async function addEvent(matchId: string, data: Omit<MatchEvent, "id">) {
   return addDoc(collection(db, "matches", matchId, "events"), data);
 }
 
-export async function deleteEvent(matchId: string, eventId: string, event?: MatchEvent, match?: Match) {
+export async function deleteEvent(matchId: string, eventId: string) {
   await deleteDoc(doc(db, "matches", matchId, "events", eventId));
-  // deduct score if goal event
-  if (event && match && (event.type === "goal" || event.type === "penalty_goal" || event.type === "own_goal")) {
-    const scoringTeam = event.type === "own_goal"
-      ? (event.team === "team1" ? "team2" : "team1")
-      : event.team;
-    const newScore = scoringTeam === "team1"
-      ? { score1: Math.max(0, (match.score1 ?? 0) - 1) }
-      : { score2: Math.max(0, (match.score2 ?? 0) - 1) };
-    await updateDoc(doc(db, "matches", matchId), newScore);
-  }
 }
 
 // Standings

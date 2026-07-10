@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { getMatch, updateMatch, subscribeEvents, addEvent, deleteEvent, recalculateStandings } from "@/lib/firestore";
+import { subscribeMatch, updateMatch, subscribeEvents, addEvent, deleteEvent, recalculateStandings, recalculateMatchScore } from "@/lib/firestore";
 import type { Match, MatchEvent, MatchStatus, EventType, ResultType } from "@/types";
 import { useRouter, useParams } from "next/navigation";
 
@@ -31,6 +31,7 @@ export default function LiveMatchPage() {
   const [match, setMatch] = useState<Match | null>(null);
   const [events, setEvents] = useState<MatchEvent[]>([]);
   const [calculating, setCalculating] = useState(false);
+  const statsInitialized = useRef(false);
 
   const [activeType, setActiveType] = useState<EventType>("goal");
   const [activeTeam, setActiveTeam] = useState<"team1" | "team2">("team1");
@@ -68,9 +69,12 @@ export default function LiveMatchPage() {
   }, [router]);
 
   useEffect(() => {
-    getMatch(id).then((m) => {
-      if (m) {
-        setMatch(m);
+    statsInitialized.current = false;
+    return subscribeMatch(id, (m) => {
+      if (!m) return;
+      setMatch(m);
+      if (!statsInitialized.current) {
+        statsInitialized.current = true;
         setPenalty1(m.penalty1 ?? 0);
         setPenalty2(m.penalty2 ?? 0);
         setResultType(m.resultType ?? "normal");
@@ -117,17 +121,8 @@ export default function LiveMatchPage() {
       minute,
       createdAt: Date.now(),
     });
-    // goal / penalty_goal → คะแนนไปทีมที่เลือก
-    // own_goal → คะแนนไปทีมตรงข้าม
     if (activeType === "goal" || activeType === "penalty_goal" || activeType === "own_goal") {
-      const scoringTeam = activeType === "own_goal"
-        ? (activeTeam === "team1" ? "team2" : "team1")
-        : activeTeam;
-      const newScore = scoringTeam === "team1"
-        ? { score1: (match.score1 ?? 0) + 1 }
-        : { score2: (match.score2 ?? 0) + 1 };
-      await updateMatch(id, newScore);
-      setMatch((prev) => prev ? { ...prev, ...newScore } : prev);
+      await recalculateMatchScore(id);
     }
     // 2nd yellow → auto red card
     if (activeType === "yellow_card") {
@@ -162,7 +157,6 @@ export default function LiveMatchPage() {
     setPlayerOut(""); setJerseyNumberOut("");
     setIsStaff(false);
     setAdding(false);
-    // recalculate standings in real-time if goal event
     if ((activeType === "goal" || activeType === "penalty_goal" || activeType === "own_goal") && match) {
       recalculateStandings(match.tournamentId);
     }
@@ -209,6 +203,13 @@ export default function LiveMatchPage() {
           <span className="text-white font-bold text-lg flex-1 text-center">{match.team1}</span>
           <span className="text-white text-3xl font-bold tracking-widest">{match.score1} : {match.score2}</span>
           <span className="text-white font-bold text-lg flex-1 text-center">{match.team2}</span>
+        </div>
+        <div className="flex justify-center mt-3">
+          <button
+            onClick={async () => { await recalculateMatchScore(id); if (match) recalculateStandings(match.tournamentId); }}
+            className="text-xs text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition-colors">
+            🔄 คำนวณสกอใหม่จาก Events
+          </button>
         </div>
       </div>
 
@@ -397,8 +398,9 @@ export default function LiveMatchPage() {
                   <span className="text-gray-500 text-xs ml-2">({ev.team === "team1" ? match.team1 : match.team2})</span>
                 </div>
                 <button onClick={async () => {
-                  await deleteEvent(id, ev.id, ev, match ?? undefined);
+                  await deleteEvent(id, ev.id);
                   if ((ev.type === "goal" || ev.type === "penalty_goal" || ev.type === "own_goal") && match) {
+                    await recalculateMatchScore(id);
                     recalculateStandings(match.tournamentId);
                   }
                 }} className="text-xs text-red-400 hover:text-red-300 ml-3">ลบ</button>
