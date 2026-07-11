@@ -150,7 +150,7 @@ export default function MatchDetailPage() {
           </div>
         </div>
 
-        {match.status === "live" && (match.halfDuration ?? 0) > 0 && (() => {
+        {match.status === "live" && (match.halfDuration ?? 0) > 0 && (!!match.timerStartedAt || (match.timerElapsed ?? 0) > 0) && (() => {
           const phase = match.timerPhase ?? "1st";
           const isHalfTime = phase === "1st_extra" && !match.extraTimeStartedAt;
           const totalMin = Math.floor(displaySeconds / 60);

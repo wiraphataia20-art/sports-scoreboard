@@ -66,7 +66,9 @@ export default function AdminDashboard() {
     if (!authReady) return;
     getTournaments().then((data) => {
       setTournaments(data);
-      setSelectedId(data[0]?.id ?? "");
+      const saved = localStorage.getItem("admin_selectedTournamentId");
+      const validId = saved && data.some((t) => t.id === saved) ? saved : (data[0]?.id ?? "");
+      setSelectedId(validId);
     });
   }, [authReady]);
 
@@ -156,14 +158,14 @@ export default function AdminDashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-        <button onClick={() => signOut(auth)} className="text-sm text-gray-400 hover:text-white">ออกจากระบบ</button>
+        <button onClick={() => { localStorage.removeItem("admin_selectedTournamentId"); signOut(auth); }} className="text-sm text-gray-400 hover:text-white">ออกจากระบบ</button>
       </div>
 
       {/* Tournament Selector */}
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-5">
         <div className="flex items-center gap-3 flex-wrap">
           <label className="text-sm text-gray-400 shrink-0">รายการแข่งขัน:</label>
-          <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)}
+          <select value={selectedId} onChange={(e) => { setSelectedId(e.target.value); localStorage.setItem("admin_selectedTournamentId", e.target.value); }}
             className={`${inputCls} flex-1 min-w-48`}>
             {tournaments.length === 0 && <option value="">-- ยังไม่มีรายการ --</option>}
             {tournaments.map((t) => (
