@@ -17,6 +17,8 @@ const inputCls = "bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm t
 
 export default function AdminDashboard() {
   const router = useRouter();
+  useEffect(() => { document.title = "Dashboard | Uni Sports Scoreboard"; }, []);
+
   const [authReady, setAuthReady] = useState(false);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");

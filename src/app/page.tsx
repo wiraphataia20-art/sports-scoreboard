@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { getTournaments, subscribeMatches } from "@/lib/firestore";
-import type { Tournament, Match } from "@/types";
+import { getTournaments, subscribeMatches, subscribeTeams, buildLogoMap } from "@/lib/firestore";
+import type { Tournament, Match, Team } from "@/types";
 import MatchCard from "@/components/MatchCard";
 
 const SPORT_LABEL: Record<string, string> = {
@@ -17,7 +17,10 @@ export default function HomePage() {
   const [selectedEventKey, setSelectedEventKey] = useState<string>("");
   const [selectedSubId, setSelectedSubId] = useState<string>("");
   const [matches, setMatches] = useState<Match[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => { document.title = "Schedule | Uni Sports Scoreboard"; }, []);
 
   useEffect(() => {
     getTournaments().then((data) => {
@@ -62,10 +65,13 @@ export default function HomePage() {
   const activeTournamentId = subOptions.length === 1 ? subOptions[0].id : selectedSubId;
 
   useEffect(() => {
-    if (!activeTournamentId) { setMatches([]); return; }
-    const unsub = subscribeMatches(activeTournamentId, setMatches);
-    return () => unsub();
+    if (!activeTournamentId) { setMatches([]); setTeams([]); return; }
+    const u1 = subscribeMatches(activeTournamentId, setMatches);
+    const u2 = subscribeTeams(activeTournamentId, setTeams);
+    return () => { u1(); u2(); };
   }, [activeTournamentId]);
+
+  const logoMap = useMemo(() => buildLogoMap(teams), [teams]);
 
   const liveMatches = matches.filter((m) => m.status === "live");
   const otherMatches = matches.filter((m) => m.status !== "live");
@@ -125,7 +131,7 @@ export default function HomePage() {
               </h2>
               <div className="flex flex-col gap-3">
                 {liveMatches.map((m) => (
-                  <MatchCard key={m.id} match={m} />
+                  <MatchCard key={m.id} match={m} logoMap={logoMap} />
                 ))}
               </div>
             </div>
@@ -139,7 +145,7 @@ export default function HomePage() {
                 </h2>
                 <div className="flex flex-col gap-3">
                   {dayMatches.map((m) => (
-                    <MatchCard key={m.id} match={m} />
+                    <MatchCard key={m.id} match={m} logoMap={logoMap} />
                   ))}
                 </div>
               </div>

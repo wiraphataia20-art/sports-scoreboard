@@ -1,20 +1,21 @@
 import Link from "next/link";
 import type { Match } from "@/types";
+import TeamLogo from "@/components/TeamLogo";
 
 const statusConfig = {
   upcoming: { label: "Upcoming", className: "bg-gray-700 text-gray-300" },
-  live: { label: "Live", className: "bg-red-600 text-white animate-pulse" },
-  full_time: { label: "Full Time", className: "bg-green-700 text-white" },
+  live:     { label: "Live",     className: "bg-red-600 text-white animate-pulse" },
+  full_time:{ label: "Full Time",className: "bg-green-700 text-white" },
 };
 
 const sportLabels: Record<string, string> = {
-  football: "FOOTBALL",
+  football:   "FOOTBALL",
   basketball: "BASKETBALL",
   volleyball: "VOLLEYBALL",
-  futsal: "FUTSAL",
+  futsal:     "FUTSAL",
 };
 
-export default function MatchCard({ match }: { match: Match }) {
+export default function MatchCard({ match, logoMap }: { match: Match; logoMap?: Record<string, string> }) {
   const status = statusConfig[match.status];
   const hasPenalty = match.penalty1 !== undefined && match.penalty2 !== undefined;
 
@@ -36,25 +37,31 @@ export default function MatchCard({ match }: { match: Match }) {
           </span>
         </div>
 
-        <div className="flex items-center justify-between">
-          <span className="text-white font-bold text-lg w-2/5">{match.team1}</span>
-          <div className="text-center">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <TeamLogo name={match.team1} logoUrl={logoMap?.[match.team1]} />
+            <span className="text-white font-bold text-lg truncate">{match.team1}</span>
+          </div>
+
+          <div className="text-center shrink-0">
             {match.status === "upcoming" ? (
               <span className="text-gray-400 text-xl font-bold">vs</span>
             ) : (
-              <div className="text-center">
+              <>
                 <span className="text-white text-2xl font-bold tracking-widest">
                   {match.score1} : {match.score2}
                 </span>
                 {hasPenalty && (
-                  <p className="text-gray-400 text-xs mt-0.5">
-                    [{match.penalty1}] - [{match.penalty2}]
-                  </p>
+                  <p className="text-gray-400 text-xs mt-0.5">[{match.penalty1}] - [{match.penalty2}]</p>
                 )}
-              </div>
+              </>
             )}
           </div>
-          <span className="text-white font-bold text-lg w-2/5 text-right">{match.team2}</span>
+
+          <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
+            <span className="text-white font-bold text-lg truncate text-right">{match.team2}</span>
+            <TeamLogo name={match.team2} logoUrl={logoMap?.[match.team2]} />
+          </div>
         </div>
 
         <div className="flex items-center justify-between mt-3 text-xs text-gray-500">

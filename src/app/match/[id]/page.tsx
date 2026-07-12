@@ -3,26 +3,9 @@
 import { Fragment, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { subscribeMatch, subscribeEvents } from "@/lib/firestore";
+import { subscribeMatch, subscribeEvents, getTeams, buildLogoMap } from "@/lib/firestore";
+import { EVENT_META, eventLabel } from "@/lib/events";
 import type { Match, MatchEvent } from "@/types";
-
-const EVENT_ICON: Record<string, string> = {
-  goal: "⚽",
-  penalty_goal: "🎯",
-  own_goal: "🤦",
-  yellow_card: "🟨",
-  red_card: "🟥",
-  substitution: "🔄",
-};
-
-const EVENT_LABEL: Record<string, string> = {
-  goal: "Goal",
-  penalty_goal: "Penalty",
-  own_goal: "Own Goal",
-  yellow_card: "Yellow Card",
-  red_card: "Red Card",
-  substitution: "Substitution",
-};
 
 const STATUS_BADGE: Record<string, string> = {
   upcoming: "bg-gray-700 text-gray-300",
@@ -42,10 +25,11 @@ function EventRow({ event, match }: { event: MatchEvent; match: Match }) {
   const playerOutStr = event.playerOut
     ? `${event.jerseyNumberOut ? `#${event.jerseyNumberOut} ` : ""}${event.playerOut}`
     : "";
+  const { icon } = EVENT_META[event.type];
   const label =
     event.type === "substitution"
-      ? `${EVENT_ICON[event.type]} in ${playerStr}${playerOutStr ? ` out ${playerOutStr}` : ""}`
-      : `${EVENT_ICON[event.type]} ${EVENT_LABEL[event.type]} – ${playerStr}${event.isStaff ? " (Staff)" : ""}`;
+      ? `${icon} in ${playerStr}${playerOutStr ? ` out ${playerOutStr}` : ""}`
+      : `${eventLabel(event.type)} – ${playerStr}${event.isStaff ? " (Staff)" : ""}`;
 
   return (
     <div className="grid grid-cols-[1fr_80px_1fr] gap-2 py-2 border-b border-gray-800 text-sm">
@@ -64,12 +48,18 @@ export default function MatchDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [match, setMatch] = useState<Match | null>(null);
   const [events, setEvents] = useState<MatchEvent[]>([]);
+  const [logoMap, setLogoMap] = useState<Record<string, string>>({});
   const [displaySeconds, setDisplaySeconds] = useState(0);
   const [extraSeconds, setExtraSeconds] = useState(0);
 
   useEffect(() => {
     return subscribeMatch(id, (m) => { if (m) setMatch(m); });
   }, [id]);
+
+  useEffect(() => {
+    if (!match?.tournamentId) return;
+    getTeams(match.tournamentId).then((teams) => setLogoMap(buildLogoMap(teams)));
+  }, [match?.tournamentId]);
 
   useEffect(() => {
     const unsub = subscribeEvents(id, setEvents);
@@ -124,9 +114,14 @@ export default function MatchDetailPage() {
         </div>
 
         <div className="flex items-center justify-between gap-4">
-          <div className="flex-1 text-center">
-            <h2 className="text-white font-bold text-xl">{match.team1}</h2>
-            {match.team1Full && <p className="text-gray-400 text-xs mt-0.5">{match.team1Full}</p>}
+          <div className="flex-1 text-center flex flex-col items-center gap-2">
+            {logoMap[match.team1] && (
+              <img src={logoMap[match.team1]} alt={match.team1} className="w-14 h-14 rounded-full object-cover" />
+            )}
+            <div>
+              <h2 className="text-white font-bold text-xl">{match.team1}</h2>
+              {match.team1Full && <p className="text-gray-400 text-xs mt-0.5">{match.team1Full}</p>}
+            </div>
           </div>
           <div className="text-center min-w-[120px]">
             {match.status === "upcoming" ? (
@@ -144,9 +139,14 @@ export default function MatchDetailPage() {
               </>
             )}
           </div>
-          <div className="flex-1 text-center">
-            <h2 className="text-white font-bold text-xl">{match.team2}</h2>
-            {match.team2Full && <p className="text-gray-400 text-xs mt-0.5">{match.team2Full}</p>}
+          <div className="flex-1 text-center flex flex-col items-center gap-2">
+            {logoMap[match.team2] && (
+              <img src={logoMap[match.team2]} alt={match.team2} className="w-14 h-14 rounded-full object-cover" />
+            )}
+            <div>
+              <h2 className="text-white font-bold text-xl">{match.team2}</h2>
+              {match.team2Full && <p className="text-gray-400 text-xs mt-0.5">{match.team2Full}</p>}
+            </div>
           </div>
         </div>
 

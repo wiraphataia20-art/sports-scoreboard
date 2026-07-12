@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { getTournaments, subscribeStandings, getTournamentTopStats } from "@/lib/firestore";
+import { getTournaments, subscribeStandings, subscribeTeams, getTournamentTopStats, buildLogoMap } from "@/lib/firestore";
 import type { PlayerStat } from "@/lib/firestore";
-import type { Tournament, Standing } from "@/types";
+import type { Tournament, Standing, Team } from "@/types";
 import StandingsTable from "@/components/StandingsTable";
 
 const SPORT_LABEL: Record<string, string> = {
@@ -20,6 +20,9 @@ export default function StandingsPage() {
   const [selectedEventKey, setSelectedEventKey] = useState<string>("");
   const [selectedSubId, setSelectedSubId] = useState<string>("");
   const [standings, setStandings] = useState<Standing[]>([]);
+
+  useEffect(() => { document.title = "Standings | Uni Sports Scoreboard"; }, []);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [topStats, setTopStats] = useState<{
     topScorers: PlayerStat[];
     topYellows: PlayerStat[];
@@ -62,17 +65,19 @@ export default function StandingsPage() {
   const selectedTournamentId = subOptions.length === 1 ? subOptions[0].id : selectedSubId;
 
   useEffect(() => {
-    if (!selectedTournamentId) { setStandings([]); setTopStats(null); return; }
-    const unsub = subscribeStandings(selectedTournamentId, setStandings);
-    return () => unsub();
+    if (!selectedTournamentId) { setStandings([]); setTeams([]); setTopStats(null); return; }
+    const u1 = subscribeStandings(selectedTournamentId, setStandings);
+    const u2 = subscribeTeams(selectedTournamentId, setTeams);
+    return () => { u1(); u2(); };
   }, [selectedTournamentId]);
+
+  const logoMap = useMemo(() => buildLogoMap(teams), [teams]);
 
   useEffect(() => {
     if (!selectedTournamentId) return;
     getTournamentTopStats(selectedTournamentId).then(setTopStats);
   }, [selectedTournamentId, standings]);
 
-  // Group standings by group field
   const grouped = standings.reduce<Record<string, Standing[]>>((acc, s) => {
     const g = s.group || "ทั่วไป";
     acc[g] = acc[g] ? [...acc[g], s] : [s];
@@ -110,7 +115,6 @@ export default function StandingsPage() {
         )}
       </div>
 
-      {/* Scoring rules info */}
       {selectedTournament && (
         <div className="flex gap-3 mb-5 flex-wrap">
           {[
@@ -138,13 +142,12 @@ export default function StandingsPage() {
                 {group === "ทั่วไป" ? "ตารางคะแนน" : `สาย ${group}`}
               </h2>
               <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
-                <StandingsTable standings={groupStandings} />
+                <StandingsTable standings={groupStandings} logoMap={logoMap} />
               </div>
             </div>
           ))
       )}
 
-      {/* Top Stats Leaderboard */}
       {topStats && (topStats.topScorers.length > 0 || topStats.topYellows.length > 0 || topStats.topReds.length > 0) && (
         <div className="mt-4">
           <h2 className="text-lg font-semibold text-gray-300 mb-3">สถิติผู้เล่น</h2>

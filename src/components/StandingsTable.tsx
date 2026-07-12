@@ -1,6 +1,10 @@
 import type { Standing } from "@/types";
+import TeamLogo from "@/components/TeamLogo";
 
-export default function StandingsTable({ standings }: { standings: Standing[] }) {
+export default function StandingsTable({ standings, logoMap }: {
+  standings: Standing[];
+  logoMap?: Record<string, string>;
+}) {
   if (standings.length === 0) {
     return <p className="text-gray-500 text-center py-8">ยังไม่มีข้อมูล Standings</p>;
   }
@@ -24,12 +28,14 @@ export default function StandingsTable({ standings }: { standings: Standing[] })
         </thead>
         <tbody>
           {standings.map((s, i) => (
-            <tr
-              key={s.id}
-              className="border-b border-gray-800 hover:bg-gray-800 transition-colors"
-            >
+            <tr key={s.id} className="border-b border-gray-800 hover:bg-gray-800 transition-colors">
               <td className="py-2.5 px-3 text-gray-400">{i + 1}</td>
-              <td className="py-2.5 px-3 text-white font-medium">{s.team}</td>
+              <td className="py-2.5 px-3">
+                <div className="flex items-center gap-2">
+                  <TeamLogo name={s.team} logoUrl={logoMap?.[s.team]} className="w-6 h-6" />
+                  <span className="text-white font-medium">{s.team}</span>
+                </div>
+              </td>
               <td className="py-2.5 px-3 text-center text-gray-300">{s.played}</td>
               <td className="py-2.5 px-3 text-center text-green-400">{s.win}</td>
               <td className="py-2.5 px-3 text-center text-gray-300">{s.draw}</td>

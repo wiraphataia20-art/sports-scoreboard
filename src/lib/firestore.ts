@@ -66,6 +66,15 @@ export function subscribeTeams(
   });
 }
 
+export async function getTeams(tournamentId: string): Promise<Team[]> {
+  const snap = await getDocs(collection(db, "tournaments", tournamentId, "teams"));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Team));
+}
+
+export function buildLogoMap(teams: Team[]): Record<string, string> {
+  return Object.fromEntries(teams.filter((t) => t.logoUrl).map((t) => [t.name, t.logoUrl!]));
+}
+
 export async function addTeam(tournamentId: string, data: Omit<Team, "id">) {
   const cleaned = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
   return addDoc(collection(db, "tournaments", tournamentId, "teams"), cleaned);

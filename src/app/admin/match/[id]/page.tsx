@@ -5,25 +5,18 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { subscribeMatch, updateMatch, subscribeEvents, addEvent, deleteEvent, recalculateStandings, recalculateMatchScore } from "@/lib/firestore";
 import type { Match, MatchEvent, MatchStatus, EventType, ResultType } from "@/types";
+import { EVENT_META, eventLabel } from "@/lib/events";
 import { useRouter, useParams } from "next/navigation";
 
-const EVENT_BUTTONS: { type: EventType; label: string; icon: string; color: string }[] = [
-  { type: "goal", label: "Goal", icon: "⚽", color: "bg-blue-600 hover:bg-blue-700" },
-  { type: "penalty_goal", label: "Penalty", icon: "🎯", color: "bg-cyan-600 hover:bg-cyan-700" },
-  { type: "own_goal", label: "Own Goal", icon: "🤦", color: "bg-orange-600 hover:bg-orange-700" },
-  { type: "yellow_card", label: "Yellow Card", icon: "🟨", color: "bg-yellow-600 hover:bg-yellow-700" },
-  { type: "red_card", label: "Red Card", icon: "🟥", color: "bg-red-600 hover:bg-red-700" },
-  { type: "substitution", label: "Substitution", icon: "🔄", color: "bg-purple-600 hover:bg-purple-700" },
+const EVENT_BUTTONS: { type: EventType; color: string }[] = [
+  { type: "goal",         color: "bg-blue-600 hover:bg-blue-700" },
+  { type: "penalty_goal", color: "bg-cyan-600 hover:bg-cyan-700" },
+  { type: "penalty_miss", color: "bg-rose-700 hover:bg-rose-800" },
+  { type: "own_goal",     color: "bg-orange-600 hover:bg-orange-700" },
+  { type: "yellow_card",  color: "bg-yellow-600 hover:bg-yellow-700" },
+  { type: "red_card",     color: "bg-red-600 hover:bg-red-700" },
+  { type: "substitution", color: "bg-purple-600 hover:bg-purple-700" },
 ];
-
-const EVENT_LABEL: Record<string, string> = {
-  goal: "⚽ Goal",
-  penalty_goal: "🎯 Penalty",
-  own_goal: "🤦 Own Goal",
-  yellow_card: "🟨 Yellow Card",
-  red_card: "🟥 Red Card",
-  substitution: "🔄 Substitution",
-};
 
 export default function LiveMatchPage() {
   const router = useRouter();
@@ -471,13 +464,13 @@ export default function LiveMatchPage() {
       {/* Add Event */}
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 mb-4">
         <p className="text-sm font-semibold mb-3">เพิ่มเหตุการณ์</p>
-        <div className="grid grid-cols-3 gap-2 mb-3">
+        <div className="grid grid-cols-4 gap-2 mb-3">
           {EVENT_BUTTONS.map((btn) => (
             <button key={btn.type} onClick={() => { setActiveType(btn.type); setIsStaff(false); }}
               className={`py-2 rounded text-sm font-medium transition-colors ${
                 activeType === btn.type ? btn.color + " text-white" : "bg-gray-900 text-gray-400 hover:bg-gray-700"
               }`}>
-              {btn.icon} {btn.label}
+              {EVENT_META[btn.type].icon} {EVENT_META[btn.type].label}
             </button>
           ))}
         </div>
@@ -536,7 +529,7 @@ export default function LiveMatchPage() {
           )}
           <button type="submit" disabled={adding}
             className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded px-4 py-2 text-sm font-medium transition-colors">
-            {adding ? "กำลังเพิ่ม..." : `เพิ่ม ${EVENT_LABEL[activeType]}`}
+            {adding ? "กำลังเพิ่ม..." : `เพิ่ม ${eventLabel(activeType)}`}
           </button>
         </form>
       </div>
@@ -635,7 +628,7 @@ export default function LiveMatchPage() {
                 <div className="text-sm">
                   <span className="text-gray-400">{ev.minute}&apos; </span>
                   <span className="text-white">
-                    {EVENT_LABEL[ev.type]} – {ev.jerseyNumber ? `#${ev.jerseyNumber} ` : ""}{ev.player}
+                    {eventLabel(ev.type)} – {ev.jerseyNumber ? `#${ev.jerseyNumber} ` : ""}{ev.player}
                   </span>
                   {ev.playerOut && (
                     <span className="text-gray-400"> / out {ev.jerseyNumberOut ? `#${ev.jerseyNumberOut} ` : ""}{ev.playerOut}</span>

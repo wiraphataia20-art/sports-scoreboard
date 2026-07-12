@@ -2,7 +2,7 @@ export type SportType = "football" | "basketball" | "volleyball" | "futsal";
 
 export type MatchStatus = "upcoming" | "live" | "full_time";
 
-export type EventType = "goal" | "penalty_goal" | "own_goal" | "yellow_card" | "red_card" | "substitution";
+export type EventType = "goal" | "penalty_goal" | "penalty_miss" | "own_goal" | "yellow_card" | "red_card" | "substitution";
 
 export type ResultType = "normal" | "penalty";
 
