@@ -53,7 +53,11 @@ export default function MatchDetailPage() {
   const [extraSeconds, setExtraSeconds] = useState(0);
 
   useEffect(() => {
-    return subscribeMatch(id, (m) => { if (m) setMatch(m); });
+    return subscribeMatch(id, (m) => {
+      if (!m) return;
+      setMatch(m);
+      document.title = `${m.team1} vs ${m.team2} | Uni Sports Scoreboard`;
+    });
   }, [id]);
 
   useEffect(() => {

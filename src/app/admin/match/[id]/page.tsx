@@ -166,6 +166,7 @@ export default function LiveMatchPage() {
     return subscribeMatch(id, (m) => {
       if (!m) return;
       setMatch(m);
+      document.title = `Live: ${m.team1} vs ${m.team2} | Uni Sports Scoreboard`;
       if (!statsInitialized.current) {
         statsInitialized.current = true;
         setPenalty1(m.penalty1 ?? 0);
