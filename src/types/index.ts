@@ -1,5 +1,8 @@
 export type SportType = "football" | "basketball" | "volleyball" | "futsal";
 
+export interface SetScore { s1: number; s2: number; }
+export interface QuarterScore { s1: number; s2: number; }
+
 export type MatchStatus = "upcoming" | "live" | "full_time";
 
 export type EventType = "goal" | "penalty_goal" | "penalty_miss" | "own_goal" | "yellow_card" | "red_card" | "substitution";
@@ -51,6 +54,10 @@ export interface Match {
   timerPhase?: "1st" | "1st_extra" | "2nd" | "2nd_extra";
   extraTimeStartedAt?: number | null;
   extraTimeElapsed?: number;
+  // Volleyball sets
+  sets?: SetScore[];
+  // Basketball quarters
+  quarters?: QuarterScore[];
   // Match Stats
   shots1?: number;
   shots2?: number;

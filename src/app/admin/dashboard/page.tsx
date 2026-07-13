@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import {
   getTournaments, addTournament,
@@ -57,11 +57,19 @@ export default function AdminDashboard() {
   const [mRound, setMRound] = useState("");
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      if (!user) router.push("/admin");
-      else setAuthReady(true);
+    let midnightTimer: ReturnType<typeof setTimeout>;
+    const unsub = onAuthStateChanged(auth, (user: User | null) => {
+      if (!user) { router.push("/admin"); return; }
+      setAuthReady(true);
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(24, 0, 0, 0);
+      midnightTimer = setTimeout(async () => {
+        await signOut(auth);
+        router.push("/admin");
+      }, midnight.getTime() - now.getTime());
     });
-    return () => unsub();
+    return () => { unsub(); clearTimeout(midnightTimer); };
   }, [router]);
 
   useEffect(() => {

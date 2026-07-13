@@ -1,10 +1,10 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { subscribeMatch, updateMatch, subscribeEvents, addEvent, deleteEvent, recalculateStandings, recalculateMatchScore } from "@/lib/firestore";
-import type { Match, MatchEvent, MatchStatus, EventType, ResultType } from "@/types";
+import type { Match, MatchEvent, MatchStatus, EventType, ResultType, SetScore, QuarterScore } from "@/types";
 import { EVENT_META, eventLabel } from "@/lib/events";
 import { useRouter, useParams } from "next/navigation";
 
@@ -58,9 +58,17 @@ export default function LiveMatchPage() {
   const [directScore2, setDirectScore2] = useState(0);
   const [savingScore, setSavingScore] = useState(false);
 
+  // Volleyball sets
+  const [sets, setSets] = useState<SetScore[]>([{ s1: 0, s2: 0 }]);
+  // Basketball quarters
+  const [quarters, setQuarters] = useState<QuarterScore[]>([
+    { s1: 0, s2: 0 }, { s1: 0, s2: 0 }, { s1: 0, s2: 0 }, { s1: 0, s2: 0 },
+  ]);
+
   // Timer
   const [displaySeconds, setDisplaySeconds] = useState(0);
   const [displayExtraSecs, setDisplayExtraSecs] = useState(0);
+  const [authReady, setAuthReady] = useState(false);
   const autoPauseRef = useRef(false);
 
   function getCurrentSeconds(m: Match): number {
@@ -155,10 +163,19 @@ export default function LiveMatchPage() {
   }
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      if (!user) router.push("/admin");
+    let midnightTimer: ReturnType<typeof setTimeout>;
+    const unsub = onAuthStateChanged(auth, (user: User | null) => {
+      if (!user) { router.push("/admin"); return; }
+      setAuthReady(true);
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(24, 0, 0, 0);
+      midnightTimer = setTimeout(async () => {
+        await signOut(auth);
+        router.push("/admin");
+      }, midnight.getTime() - now.getTime());
     });
-    return () => unsub();
+    return () => { unsub(); clearTimeout(midnightTimer); };
   }, [router]);
 
   useEffect(() => {
@@ -184,6 +201,8 @@ export default function LiveMatchPage() {
         setFouls2(m.fouls2 ?? 0);
         setOffsides1(m.offsides1 ?? 0);
         setOffsides2(m.offsides2 ?? 0);
+        if (m.sets && m.sets.length > 0) setSets(m.sets);
+        if (m.quarters && m.quarters.length > 0) setQuarters(m.quarters);
       }
     });
   }, [id]);
@@ -282,6 +301,28 @@ export default function LiveMatchPage() {
     alert("บันทึก Stats เรียบร้อย!");
   }
 
+  async function handleSaveSets(newSets: SetScore[]) {
+    if (!match) return;
+    const score1 = newSets.filter((s) => s.s1 > s.s2).length;
+    const score2 = newSets.filter((s) => s.s2 > s.s1).length;
+    await updateMatch(id, { sets: newSets, score1, score2 });
+    setSets(newSets);
+    setDirectScore1(score1);
+    setDirectScore2(score2);
+    if (match) recalculateStandings(match.tournamentId);
+  }
+
+  async function handleSaveQuarters(newQuarters: QuarterScore[]) {
+    if (!match) return;
+    const score1 = newQuarters.reduce((a, q) => a + q.s1, 0);
+    const score2 = newQuarters.reduce((a, q) => a + q.s2, 0);
+    await updateMatch(id, { quarters: newQuarters, score1, score2 });
+    setQuarters(newQuarters);
+    setDirectScore1(score1);
+    setDirectScore2(score2);
+    if (match) recalculateStandings(match.tournamentId);
+  }
+
   async function handleFinalize() {
     if (!match) return;
     setCalculating(true);
@@ -293,6 +334,7 @@ export default function LiveMatchPage() {
     alert("บันทึกและคำนวณ Standings เรียบร้อย!");
   }
 
+  if (!authReady) return <p className="text-gray-500">กำลังโหลด...</p>;
   if (!match) return <p className="text-gray-500">กำลังโหลด...</p>;
 
   const statusColor = match.status === "live" ? "text-red-400" : match.status === "full_time" ? "text-green-400" : "text-gray-400";
@@ -383,6 +425,99 @@ export default function LiveMatchPage() {
         </div>
       </div>
 
+      {/* Volleyball Sets */}
+      {match.sport === "volleyball" && (
+        <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 mb-4">
+          <p className="text-sm font-semibold mb-3">คะแนนแต่ละเซต</p>
+          <div className="flex flex-col gap-2">
+            {sets.map((set, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="text-xs text-gray-400 w-12 shrink-0">เซต {i + 1}</span>
+                <input type="number" min={0} value={set.s1}
+                  onChange={(e) => {
+                    const next = sets.map((s, j) => j === i ? { ...s, s1: Math.max(0, Number(e.target.value)) } : s);
+                    setSets(next);
+                  }}
+                  className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white text-center focus:outline-none focus:border-blue-500" />
+                <span className="text-gray-500">–</span>
+                <input type="number" min={0} value={set.s2}
+                  onChange={(e) => {
+                    const next = sets.map((s, j) => j === i ? { ...s, s2: Math.max(0, Number(e.target.value)) } : s);
+                    setSets(next);
+                  }}
+                  className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white text-center focus:outline-none focus:border-blue-500" />
+                {sets.length > 1 && (
+                  <button onClick={() => setSets(sets.filter((_, j) => j !== i))}
+                    className="text-xs text-red-400 hover:text-red-300 ml-1">ลบ</button>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 mt-3">
+            {sets.length < 5 && (
+              <button onClick={() => setSets([...sets, { s1: 0, s2: 0 }])}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white rounded px-3 py-1.5 text-sm transition-colors">
+                + เพิ่มเซต
+              </button>
+            )}
+            <button onClick={() => handleSaveSets(sets)}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded px-3 py-1.5 text-sm font-medium transition-colors">
+              💾 บันทึก
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 mt-2 text-center">
+            เซตที่ชนะ: {sets.filter(s => s.s1 > s.s2).length} – {sets.filter(s => s.s2 > s.s1).length}
+          </p>
+        </div>
+      )}
+
+      {/* Basketball Quarters */}
+      {match.sport === "basketball" && (
+        <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 mb-4">
+          <p className="text-sm font-semibold mb-3">คะแนนแต่ละไตรมาส</p>
+          <div className="grid grid-cols-[60px_1fr_16px_1fr] gap-x-2 gap-y-2 items-center text-sm mb-2">
+            <div />
+            <div className="text-xs text-center text-gray-400">{match.team1}</div>
+            <div />
+            <div className="text-xs text-center text-gray-400">{match.team2}</div>
+            {quarters.map((q, i) => (
+              <Fragment key={i}>
+                <span className="text-xs text-gray-400">{i < 4 ? `Q${i + 1}` : `OT${i - 3}`}</span>
+                <input type="number" min={0} value={q.s1}
+                  onChange={(e) => {
+                    const next = quarters.map((x, j) => j === i ? { ...x, s1: Math.max(0, Number(e.target.value)) } : x);
+                    setQuarters(next);
+                  }}
+                  className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white text-center focus:outline-none focus:border-blue-500" />
+                <span className="text-gray-500 text-center">–</span>
+                <input type="number" min={0} value={q.s2}
+                  onChange={(e) => {
+                    const next = quarters.map((x, j) => j === i ? { ...x, s2: Math.max(0, Number(e.target.value)) } : x);
+                    setQuarters(next);
+                  }}
+                  className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white text-center focus:outline-none focus:border-blue-500" />
+              </Fragment>
+            ))}
+            <span className="text-xs text-gray-200 font-semibold">Total</span>
+            <div className="text-center font-bold text-white">{quarters.reduce((a, q) => a + q.s1, 0)}</div>
+            <span className="text-gray-500 text-center">–</span>
+            <div className="text-center font-bold text-white">{quarters.reduce((a, q) => a + q.s2, 0)}</div>
+          </div>
+          <div className="flex gap-2 mt-1">
+            {quarters.length < 6 && (
+              <button onClick={() => setQuarters([...quarters, { s1: 0, s2: 0 }])}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white rounded px-3 py-1.5 text-sm transition-colors">
+                + OT
+              </button>
+            )}
+            <button onClick={() => handleSaveQuarters(quarters)}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded px-3 py-1.5 text-sm font-medium transition-colors">
+              💾 บันทึก
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Timer */}
       {(match.halfDuration ?? 0) > 0 && (() => {
         const half = match.halfDuration!;
@@ -462,8 +597,8 @@ export default function LiveMatchPage() {
         );
       })()}
 
-      {/* Add Event */}
-      <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 mb-4">
+      {/* Add Event — football/futsal only */}
+      {(match.sport === "football" || match.sport === "futsal") && <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 mb-4">
         <p className="text-sm font-semibold mb-3">เพิ่มเหตุการณ์</p>
         <div className="grid grid-cols-4 gap-2 mb-3">
           {EVENT_BUTTONS.map((btn) => (
@@ -533,9 +668,10 @@ export default function LiveMatchPage() {
             {adding ? "กำลังเพิ่ม..." : `เพิ่ม ${eventLabel(activeType)}`}
           </button>
         </form>
-      </div>
+      </div>}
 
-      {/* Match Stats */}
+      {/* Match Stats — football/futsal only */}
+      {(match.sport === "football" || match.sport === "futsal") && (
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 mb-4">
         <p className="text-sm font-semibold mb-3">Match Stats</p>
         <div className="grid grid-cols-[1fr_auto_1fr] gap-x-3 gap-y-2 items-center text-sm mb-3">
@@ -559,7 +695,6 @@ export default function LiveMatchPage() {
                 className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white text-center text-sm focus:outline-none focus:border-blue-500" />
             </Fragment>
           ))}
-          {/* Auto-calculated from events */}
           {[
             { label: "Yellow Cards", type: "yellow_card", color: "text-yellow-400" },
             { label: "Red Cards", type: "red_card", color: "text-red-400" },
@@ -580,37 +715,41 @@ export default function LiveMatchPage() {
           {savingStats ? "กำลังบันทึก..." : "💾 บันทึก Stats"}
         </button>
       </div>
+      )}
 
       {/* Finalize Match */}
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 mb-4">
         <p className="text-sm font-semibold mb-3">จบแมตช์ + คำนวณ Standings</p>
 
-        <p className="text-xs text-gray-400 mb-2">ประเภทผล</p>
-        <div className="flex gap-2 mb-3">
-          <button onClick={() => setResultType("normal")}
-            className={`flex-1 py-2 rounded text-sm font-medium transition-colors ${resultType === "normal" ? "bg-green-700 text-white" : "bg-gray-900 text-gray-400 hover:bg-gray-700"}`}>
-            ✅ ปกติ (90 นาที)
-          </button>
-          <button onClick={() => setResultType("penalty")}
-            className={`flex-1 py-2 rounded text-sm font-medium transition-colors ${resultType === "penalty" ? "bg-orange-600 text-white" : "bg-gray-900 text-gray-400 hover:bg-gray-700"}`}>
-            🔫 ยิง Penalty
-          </button>
-        </div>
-
-        {resultType === "penalty" && (
-          <div className="flex items-center gap-3 mb-3">
-            <div className="flex flex-col items-center flex-1">
-              <span className="text-xs text-gray-400 mb-1">{match.team1}</span>
-              <input type="number" min={0} value={penalty1} onChange={(e) => setPenalty1(Number(e.target.value))}
-                className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white text-xl font-bold text-center focus:outline-none focus:border-blue-500" />
+        {(match.sport === "football" || match.sport === "futsal") && (
+          <>
+            <p className="text-xs text-gray-400 mb-2">ประเภทผล</p>
+            <div className="flex gap-2 mb-3">
+              <button onClick={() => setResultType("normal")}
+                className={`flex-1 py-2 rounded text-sm font-medium transition-colors ${resultType === "normal" ? "bg-green-700 text-white" : "bg-gray-900 text-gray-400 hover:bg-gray-700"}`}>
+                ✅ ปกติ (90 นาที)
+              </button>
+              <button onClick={() => setResultType("penalty")}
+                className={`flex-1 py-2 rounded text-sm font-medium transition-colors ${resultType === "penalty" ? "bg-orange-600 text-white" : "bg-gray-900 text-gray-400 hover:bg-gray-700"}`}>
+                🔫 ยิง Penalty
+              </button>
             </div>
-            <span className="text-gray-500 font-bold text-lg">–</span>
-            <div className="flex flex-col items-center flex-1">
-              <span className="text-xs text-gray-400 mb-1">{match.team2}</span>
-              <input type="number" min={0} value={penalty2} onChange={(e) => setPenalty2(Number(e.target.value))}
-                className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white text-xl font-bold text-center focus:outline-none focus:border-blue-500" />
-            </div>
-          </div>
+            {resultType === "penalty" && (
+              <div className="flex items-center gap-3 mb-3">
+                <div className="flex flex-col items-center flex-1">
+                  <span className="text-xs text-gray-400 mb-1">{match.team1}</span>
+                  <input type="number" min={0} value={penalty1} onChange={(e) => setPenalty1(Number(e.target.value))}
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white text-xl font-bold text-center focus:outline-none focus:border-blue-500" />
+                </div>
+                <span className="text-gray-500 font-bold text-lg">–</span>
+                <div className="flex flex-col items-center flex-1">
+                  <span className="text-xs text-gray-400 mb-1">{match.team2}</span>
+                  <input type="number" min={0} value={penalty2} onChange={(e) => setPenalty2(Number(e.target.value))}
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white text-xl font-bold text-center focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         <button onClick={handleFinalize} disabled={calculating}
@@ -619,8 +758,8 @@ export default function LiveMatchPage() {
         </button>
       </div>
 
-      {/* Event List */}
-      {events.length > 0 && (
+      {/* Event List — football/futsal only */}
+      {(match.sport === "football" || match.sport === "futsal") && events.length > 0 && (
         <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
           <p className="text-sm font-semibold mb-3">เหตุการณ์ทั้งหมด ({events.length})</p>
           <div className="flex flex-col gap-2">

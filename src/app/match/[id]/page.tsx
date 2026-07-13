@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { subscribeMatch, subscribeEvents, getTeams, buildLogoMap } from "@/lib/firestore";
 import { EVENT_META, eventLabel } from "@/lib/events";
-import type { Match, MatchEvent } from "@/types";
+import type { Match, MatchEvent, SetScore, QuarterScore } from "@/types";
 
 const STATUS_BADGE: Record<string, string> = {
   upcoming: "bg-gray-700 text-gray-300",
@@ -200,8 +200,67 @@ export default function MatchDetailPage() {
         </div>
       </div>
 
+      {/* Volleyball Sets */}
+      {match.sport === "volleyball" && match.sets && match.sets.length > 0 && (
+        <div className="bg-gray-800 rounded-lg border border-gray-700 p-5 mb-4">
+          <h3 className="font-semibold mb-3">คะแนนแต่ละเซต</h3>
+          <div className="grid grid-cols-[1fr_auto_1fr] gap-x-4 gap-y-2 items-center text-sm">
+            <div className="text-center text-xs text-gray-400 font-semibold">{match.team1}</div>
+            <div />
+            <div className="text-center text-xs text-gray-400 font-semibold">{match.team2}</div>
+            {(match.sets as SetScore[]).map((s, i) => {
+              const win1 = s.s1 > s.s2;
+              const win2 = s.s2 > s.s1;
+              return (
+                <Fragment key={i}>
+                  <div className={`text-center font-bold text-lg ${win1 ? "text-white" : "text-gray-500"}`}>{s.s1}</div>
+                  <div className="text-center text-xs text-gray-500">เซต {i + 1}</div>
+                  <div className={`text-center font-bold text-lg ${win2 ? "text-white" : "text-gray-500"}`}>{s.s2}</div>
+                </Fragment>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Basketball Quarters */}
+      {match.sport === "basketball" && match.quarters && match.quarters.length > 0 && (
+        <div className="bg-gray-800 rounded-lg border border-gray-700 p-5 mb-4">
+          <h3 className="font-semibold mb-3">คะแนนแต่ละไตรมาส</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-center">
+              <thead>
+                <tr className="text-gray-400 text-xs">
+                  <th className="text-left py-1 pr-4">ทีม</th>
+                  {(match.quarters as QuarterScore[]).map((_, i) => (
+                    <th key={i} className="py-1 px-2">{i < 4 ? `Q${i + 1}` : `OT${i - 3}`}</th>
+                  ))}
+                  <th className="py-1 px-2 text-white font-bold">รวม</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-t border-gray-700">
+                  <td className="text-left py-2 pr-4 text-white font-semibold">{match.team1}</td>
+                  {(match.quarters as QuarterScore[]).map((q, i) => (
+                    <td key={i} className="py-2 px-2 text-gray-300">{q.s1}</td>
+                  ))}
+                  <td className="py-2 px-2 text-white font-bold">{(match.quarters as QuarterScore[]).reduce((a, q) => a + q.s1, 0)}</td>
+                </tr>
+                <tr className="border-t border-gray-700">
+                  <td className="text-left py-2 pr-4 text-white font-semibold">{match.team2}</td>
+                  {(match.quarters as QuarterScore[]).map((q, i) => (
+                    <td key={i} className="py-2 px-2 text-gray-300">{q.s2}</td>
+                  ))}
+                  <td className="py-2 px-2 text-white font-bold">{(match.quarters as QuarterScore[]).reduce((a, q) => a + q.s2, 0)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Events Timeline */}
-      {events.length > 0 && (
+      {events.length > 0 && (match.sport === "football" || match.sport === "futsal") && (
         <div className="bg-gray-800 rounded-lg border border-gray-700 p-5">
           <h3 className="font-semibold mb-1">เหตุการณ์ในเกม</h3>
           <div className="grid grid-cols-[1fr_80px_1fr] gap-2 mb-2">
@@ -215,8 +274,8 @@ export default function MatchDetailPage() {
         </div>
       )}
 
-      {/* Match Stats */}
-      {match.status !== "upcoming" && (() => {
+      {/* Match Stats — football/futsal only */}
+      {(match.sport === "football" || match.sport === "futsal") && match.status !== "upcoming" && (() => {
         const yellowCards1 = events.filter(e => e.type === "yellow_card" && e.team === "team1").length;
         const yellowCards2 = events.filter(e => e.type === "yellow_card" && e.team === "team2").length;
         const redCards1 = events.filter(e => e.type === "red_card" && e.team === "team1").length;
