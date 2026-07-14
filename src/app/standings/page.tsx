@@ -147,7 +147,7 @@ export default function StandingsPage() {
                 {group === "ทั่วไป" ? "ตารางคะแนน" : `สาย ${group}`}
               </h2>
               <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
-                <StandingsTable standings={groupStandings} logoMap={logoMap} />
+                <StandingsTable standings={groupStandings} logoMap={logoMap} sport={selectedTournament?.sport} />
               </div>
             </div>
           ))

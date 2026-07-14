@@ -282,7 +282,7 @@ export async function recalculateStandings(tournamentId: string): Promise<void> 
     if (m.stage === "knockout") continue;
     // include live matches (treat as normal result) and full_time with resultType
     if (m.status !== "live" && m.status !== "full_time") continue;
-    if (m.status === "full_time" && !m.resultType) continue;
+    if (m.status === "full_time" && !m.resultType && tournament.sport !== "volleyball") continue;
     const group = m.group || "ทั่วไป";
     const s1 = ensureTeam(group, m.team1);
     const s2 = ensureTeam(group, m.team2);
@@ -294,7 +294,17 @@ export async function recalculateStandings(tournamentId: string): Promise<void> 
     s2.gf += m.score2;
     s2.ga += m.score1;
 
-    if (m.resultType === "penalty" && m.status === "full_time") {
+    if (tournament.sport === "volleyball") {
+      // 2-0 → winPoints/lossPoints, 2-1 → penaltyWinPoints/penaltyLossPoints
+      const isClose = Math.abs(m.score1 - m.score2) === 1;
+      if (m.score1 > m.score2) {
+        s1.win++; s1.points += isClose ? penaltyWinPoints : winPoints;
+        s2.loss++; s2.points += isClose ? penaltyLossPoints : lossPoints;
+      } else if (m.score2 > m.score1) {
+        s2.win++; s2.points += isClose ? penaltyWinPoints : winPoints;
+        s1.loss++; s1.points += isClose ? penaltyLossPoints : lossPoints;
+      }
+    } else if (m.resultType === "penalty" && m.status === "full_time") {
       const pen1 = m.penalty1 ?? 0;
       const pen2 = m.penalty2 ?? 0;
       if (pen1 > pen2) {

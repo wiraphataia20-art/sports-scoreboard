@@ -1,13 +1,16 @@
-import type { Standing } from "@/types";
+import type { Standing, SportType } from "@/types";
 import TeamLogo from "@/components/TeamLogo";
 
-export default function StandingsTable({ standings, logoMap }: {
+export default function StandingsTable({ standings, logoMap, sport }: {
   standings: Standing[];
   logoMap?: Record<string, string>;
+  sport?: SportType;
 }) {
   if (standings.length === 0) {
     return <p className="text-gray-500 text-center py-8">ยังไม่มีข้อมูล Standings</p>;
   }
+
+  const isVolleyball = sport === "volleyball";
 
   return (
     <div className="overflow-x-auto">
@@ -18,11 +21,11 @@ export default function StandingsTable({ standings, logoMap }: {
             <th className="text-left py-2 px-3">ทีม</th>
             <th className="text-center py-2 px-3">P</th>
             <th className="text-center py-2 px-3">W</th>
-            <th className="text-center py-2 px-3">D</th>
+            {!isVolleyball && <th className="text-center py-2 px-3">D</th>}
             <th className="text-center py-2 px-3">L</th>
-            <th className="text-center py-2 px-3">GF</th>
-            <th className="text-center py-2 px-3">GA</th>
-            <th className="text-center py-2 px-3">GD</th>
+            <th className="text-center py-2 px-3">{isVolleyball ? "SW" : "GF"}</th>
+            <th className="text-center py-2 px-3">{isVolleyball ? "SL" : "GA"}</th>
+            <th className="text-center py-2 px-3">{isVolleyball ? "SD" : "GD"}</th>
             <th className="text-center py-2 px-3 font-bold text-white">PTS</th>
           </tr>
         </thead>
@@ -38,7 +41,7 @@ export default function StandingsTable({ standings, logoMap }: {
               </td>
               <td className="py-2.5 px-3 text-center text-gray-300">{s.played}</td>
               <td className="py-2.5 px-3 text-center text-green-400">{s.win}</td>
-              <td className="py-2.5 px-3 text-center text-gray-300">{s.draw}</td>
+              {!isVolleyball && <td className="py-2.5 px-3 text-center text-gray-300">{s.draw}</td>}
               <td className="py-2.5 px-3 text-center text-red-400">{s.loss}</td>
               <td className="py-2.5 px-3 text-center text-gray-300">{s.gf}</td>
               <td className="py-2.5 px-3 text-center text-gray-300">{s.ga}</td>

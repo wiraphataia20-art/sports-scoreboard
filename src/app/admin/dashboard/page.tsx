@@ -184,13 +184,21 @@ export default function AdminDashboard() {
           </select>
           {selectedTournament && (
             <div className="flex gap-2 text-xs flex-wrap items-center">
-              {[
-                { label: "ชนะ", v: selectedTournament.winPoints },
-                { label: "เสมอ", v: selectedTournament.drawPoints },
-                { label: "แพ้", v: selectedTournament.lossPoints },
-                { label: "ชนะPEN", v: selectedTournament.penaltyWinPoints },
-                { label: "แพ้PEN", v: selectedTournament.penaltyLossPoints },
-              ].map(({ label, v }) => (
+              {(selectedTournament.sport === "volleyball"
+                ? [
+                    { label: "ชนะ (2-0)", v: selectedTournament.winPoints },
+                    { label: "แพ้ (2-0)", v: selectedTournament.lossPoints },
+                    { label: "ชนะ (2-1)", v: selectedTournament.penaltyWinPoints },
+                    { label: "แพ้ (2-1)", v: selectedTournament.penaltyLossPoints },
+                  ]
+                : [
+                    { label: "ชนะ", v: selectedTournament.winPoints },
+                    { label: "เสมอ", v: selectedTournament.drawPoints },
+                    { label: "แพ้", v: selectedTournament.lossPoints },
+                    { label: "ชนะPEN", v: selectedTournament.penaltyWinPoints },
+                    { label: "แพ้PEN", v: selectedTournament.penaltyLossPoints },
+                  ]
+              ).map(({ label, v }) => (
                 <span key={label} className="bg-gray-700 text-gray-300 px-2 py-1 rounded">
                   {label}: <b className="text-white">{v}</b>
                 </span>
@@ -236,35 +244,57 @@ export default function AdminDashboard() {
             </div>
             <input type="date" value={tStartDate} onChange={(e) => setTStartDate(e.target.value)}
               className={inputCls} />
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-400 shrink-0">นาที/ครึ่ง</label>
-              <input type="number" min={0} max={90} value={tHalfDuration}
-                onChange={(e) => setTHalfDuration(Number(e.target.value))}
-                className={`${inputCls} w-20`} />
-              <span className="text-xs text-gray-500">(0 = ไม่มีตัวจับเวลา)</span>
-            </div>
+            {tSport !== "volleyball" && (
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-gray-400 shrink-0">นาที/ครึ่ง</label>
+                <input type="number" min={0} max={90} value={tHalfDuration}
+                  onChange={(e) => setTHalfDuration(Number(e.target.value))}
+                  className={`${inputCls} w-20`} />
+                <span className="text-xs text-gray-500">(0 = ไม่มีตัวจับเวลา)</span>
+              </div>
+            )}
             <p className="text-xs text-gray-400">กฎแต้ม</p>
-            <div className="grid grid-cols-3 gap-1.5">
-              {[["ชนะ", tWin, setTWin], ["เสมอ", tDraw, setTDraw], ["แพ้", tLoss, setTLoss]].map(([label, val, set]) => (
-                <div key={label as string}>
-                  <p className="text-xs text-gray-500 mb-1">{label as string}</p>
-                  <input type="number" min={0} max={9} value={val as number}
-                    onChange={(e) => (set as (v: number) => void)(Number(e.target.value))}
-                    className={`${inputCls} w-full text-center`} />
+            {tSport === "volleyball" ? (
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  ["ชนะ (2-0)", tWin, setTWin],
+                  ["แพ้ (2-0)", tLoss, setTLoss],
+                  ["ชนะ (2-1)", tPenWin, setTPenWin],
+                  ["แพ้ (2-1)", tPenLoss, setTPenLoss],
+                ].map(([label, val, set]) => (
+                  <div key={label as string}>
+                    <p className="text-xs text-gray-500 mb-1">{label as string}</p>
+                    <input type="number" min={0} max={9} value={val as number}
+                      onChange={(e) => (set as (v: number) => void)(Number(e.target.value))}
+                      className={`${inputCls} w-full text-center`} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {[["ชนะ", tWin, setTWin], ["เสมอ", tDraw, setTDraw], ["แพ้", tLoss, setTLoss]].map(([label, val, set]) => (
+                    <div key={label as string}>
+                      <p className="text-xs text-gray-500 mb-1">{label as string}</p>
+                      <input type="number" min={0} max={9} value={val as number}
+                        onChange={(e) => (set as (v: number) => void)(Number(e.target.value))}
+                        className={`${inputCls} w-full text-center`} />
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <p className="text-xs text-gray-400">กฎ Penalty</p>
-            <div className="grid grid-cols-2 gap-1.5">
-              {[["ชนะ PEN", tPenWin, setTPenWin], ["แพ้ PEN", tPenLoss, setTPenLoss]].map(([label, val, set]) => (
-                <div key={label as string}>
-                  <p className="text-xs text-gray-500 mb-1">{label as string}</p>
-                  <input type="number" min={0} max={9} value={val as number}
-                    onChange={(e) => (set as (v: number) => void)(Number(e.target.value))}
-                    className={`${inputCls} w-full text-center`} />
+                <p className="text-xs text-gray-400">กฎ Penalty</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[["ชนะ PEN", tPenWin, setTPenWin], ["แพ้ PEN", tPenLoss, setTPenLoss]].map(([label, val, set]) => (
+                    <div key={label as string}>
+                      <p className="text-xs text-gray-500 mb-1">{label as string}</p>
+                      <input type="number" min={0} max={9} value={val as number}
+                        onChange={(e) => (set as (v: number) => void)(Number(e.target.value))}
+                        className={`${inputCls} w-full text-center`} />
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
             <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-medium transition-colors">
               เพิ่มรายการ
             </button>
