@@ -604,7 +604,7 @@ export default function LiveMatchPage() {
               <div className="flex justify-between text-xs text-gray-400 mb-3">
                 <span>{match.team1}</span><span>{match.team2}</span>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {[
                   { label: "Shots", v1: shots1, v2: shots2, s1: setShots1, s2: setShots2 },
                   { label: "On Target", v1: onTarget1, v2: onTarget2, s1: setOnTarget1, s2: setOnTarget2 },
@@ -613,11 +613,21 @@ export default function LiveMatchPage() {
                   { label: "Offsides", v1: offsides1, v2: offsides2, s1: setOffsides1, s2: setOffsides2 },
                 ].map(({ label, v1, v2, s1, s2 }) => (
                   <div key={label} className="flex items-center gap-2">
-                    <input type="number" min={0} value={v1} onChange={(e) => s1(Number(e.target.value))}
-                      className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-2 text-white text-center focus:outline-none" />
-                    <span className="flex-1 text-center text-xs text-gray-500">{label}</span>
-                    <input type="number" min={0} value={v2} onChange={(e) => s2(Number(e.target.value))}
-                      className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-2 text-white text-center focus:outline-none" />
+                    <div className="flex items-center gap-1 flex-1">
+                      <button onClick={() => s1(Math.max(0, v1 - 1))}
+                        className="w-9 h-9 rounded bg-gray-700 text-white font-bold text-lg leading-none">−</button>
+                      <span className="flex-1 text-center text-white font-bold text-lg tabular-nums">{v1}</span>
+                      <button onClick={() => s1(v1 + 1)}
+                        className="w-9 h-9 rounded bg-gray-700 text-white font-bold text-lg leading-none">+</button>
+                    </div>
+                    <span className="w-20 text-center text-xs text-gray-500 shrink-0">{label}</span>
+                    <div className="flex items-center gap-1 flex-1">
+                      <button onClick={() => s2(Math.max(0, v2 - 1))}
+                        className="w-9 h-9 rounded bg-gray-700 text-white font-bold text-lg leading-none">−</button>
+                      <span className="flex-1 text-center text-white font-bold text-lg tabular-nums">{v2}</span>
+                      <button onClick={() => s2(v2 + 1)}
+                        className="w-9 h-9 rounded bg-gray-700 text-white font-bold text-lg leading-none">+</button>
+                    </div>
                   </div>
                 ))}
                 {[
@@ -628,15 +638,15 @@ export default function LiveMatchPage() {
                   const c2 = events.filter(e => e.type === type && e.team === "team2").length;
                   return (
                     <div key={type} className="flex items-center gap-2">
-                      <div className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-2 text-white text-center text-sm">{c1}</div>
-                      <span className={`flex-1 text-center text-xs ${color}`}>{label}</span>
-                      <div className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-2 text-white text-center text-sm">{c2}</div>
+                      <div className="flex-1 text-center text-white font-bold text-lg">{c1}</div>
+                      <span className={`w-20 text-center text-xs shrink-0 ${color}`}>{label}</span>
+                      <div className="flex-1 text-center text-white font-bold text-lg">{c2}</div>
                     </div>
                   );
                 })}
               </div>
               <button onClick={handleSaveStats} disabled={savingStats}
-                className="w-full mt-3 bg-indigo-600 disabled:opacity-50 text-white rounded px-4 py-3 text-sm font-medium">
+                className="w-full mt-4 bg-indigo-600 disabled:opacity-50 text-white rounded px-4 py-3 text-sm font-medium">
                 {savingStats ? "กำลังบันทึก..." : "💾 บันทึก Stats"}
               </button>
             </div>
