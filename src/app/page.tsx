@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { getTournaments, subscribeMatches, subscribeTeams, buildLogoMap } from "@/lib/firestore";
 import type { Tournament, Match, Team } from "@/types";
 import MatchCard from "@/components/MatchCard";
+import { useTournament } from "@/providers/TournamentProvider";
 
 const SPORT_LABEL: Record<string, string> = {
   football: "ฟุตบอล",
@@ -14,8 +15,7 @@ const SPORT_LABEL: Record<string, string> = {
 
 export default function HomePage() {
   const [allTournaments, setAllTournaments] = useState<Tournament[]>([]);
-  const [selectedEventKey, setSelectedEventKey] = useState<string>("");
-  const [selectedSubId, setSelectedSubId] = useState<string>("");
+  const { selectedEventKey, setSelectedEventKey, selectedSubId, setSelectedSubId } = useTournament();
   const [matches, setMatches] = useState<Match[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,7 +26,9 @@ export default function HomePage() {
     getTournaments().then((data) => {
       setAllTournaments(data);
       setLoading(false);
-      if (data.length > 0) setSelectedEventKey(data[0].eventName || `${data[0].name}__${data[0].year}`);
+      if (data.length > 0 && !selectedEventKey) {
+        setSelectedEventKey(data[0].eventName || `${data[0].name}__${data[0].year}`);
+      }
     });
   }, []);
 
@@ -56,10 +58,12 @@ export default function HomePage() {
       })),
   [selectedEventKey, allTournaments]);
 
-  // auto-select first option when event changes
   useEffect(() => {
-    setSelectedSubId(subOptions[0]?.id ?? "");
-  }, [selectedEventKey]);
+    if (subOptions.length === 0) return;
+    if (!subOptions.some((o) => o.id === selectedSubId)) {
+      setSelectedSubId(subOptions[0].id);
+    }
+  }, [subOptions]);
 
   // resolve tournament id
   const activeTournamentId = subOptions.length === 1 ? subOptions[0].id : selectedSubId;

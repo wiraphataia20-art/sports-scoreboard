@@ -5,6 +5,7 @@ import { getTournaments, subscribeStandings, subscribeTeams, getTournamentTopSta
 import type { PlayerStat } from "@/lib/firestore";
 import type { Tournament, Standing, Team } from "@/types";
 import StandingsTable from "@/components/StandingsTable";
+import { useTournament } from "@/providers/TournamentProvider";
 
 const SPORT_LABEL: Record<string, string> = {
   football: "ฟุตบอล",
@@ -17,8 +18,7 @@ const getEventKey = (t: Tournament) => t.eventName || `${t.name}__${t.year}`;
 
 export default function StandingsPage() {
   const [allTournaments, setAllTournaments] = useState<Tournament[]>([]);
-  const [selectedEventKey, setSelectedEventKey] = useState<string>("");
-  const [selectedSubId, setSelectedSubId] = useState<string>("");
+  const { selectedEventKey, setSelectedEventKey, selectedSubId, setSelectedSubId } = useTournament();
   const [standings, setStandings] = useState<Standing[]>([]);
 
   useEffect(() => { document.title = "Standings | Uni Sports Scoreboard"; }, []);
@@ -32,7 +32,9 @@ export default function StandingsPage() {
   useEffect(() => {
     getTournaments().then((data) => {
       setAllTournaments(data);
-      if (data[0]) setSelectedEventKey(data[0].eventName || `${data[0].name}__${data[0].year}`);
+      if (data.length > 0 && !selectedEventKey) {
+        setSelectedEventKey(data[0].eventName || `${data[0].name}__${data[0].year}`);
+      }
     });
   }, []);
 
@@ -59,8 +61,11 @@ export default function StandingsPage() {
   [selectedEventKey, allTournaments]);
 
   useEffect(() => {
-    setSelectedSubId(subOptions[0]?.id ?? "");
-  }, [selectedEventKey]);
+    if (subOptions.length === 0) return;
+    if (!subOptions.some((o) => o.id === selectedSubId)) {
+      setSelectedSubId(subOptions[0].id);
+    }
+  }, [subOptions]);
 
   const selectedTournamentId = subOptions.length === 1 ? subOptions[0].id : selectedSubId;
 

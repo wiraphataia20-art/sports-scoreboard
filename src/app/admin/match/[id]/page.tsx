@@ -57,6 +57,7 @@ export default function LiveMatchPage() {
   const [directScore1, setDirectScore1] = useState(0);
   const [directScore2, setDirectScore2] = useState(0);
   const [savingScore, setSavingScore] = useState(false);
+  const [activeTab, setActiveTab] = useState<"score" | "events" | "stats" | "finish">("score");
 
   // Volleyball sets
   const [sets, setSets] = useState<SetScore[]>([{ s1: 0, s2: 0 }]);
@@ -338,12 +339,378 @@ export default function LiveMatchPage() {
   if (!match) return <p className="text-gray-500">กำลังโหลด...</p>;
 
   const statusColor = match.status === "live" ? "text-red-400" : match.status === "full_time" ? "text-green-400" : "text-gray-400";
+  const isFootball = match.sport === "football" || match.sport === "futsal";
+  const timerHalf = match.halfDuration ?? 0;
+
+  const mobileTabs = ["score", ...(isFootball ? ["events", "stats"] : []), "finish"] as const;
+  const tabLabel: Record<string, string> = { score: "⏱ Score", events: "⚽ Events", stats: "📊 Stats", finish: "✅ Finish" };
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <button onClick={() => router.push("/admin/dashboard")} className="text-sm text-gray-400 hover:text-white mb-4 inline-block">
-        ← กลับ Dashboard
-      </button>
+    <>
+      {/* ── MOBILE ── */}
+      <div className="md:hidden -mx-4 -mt-6 flex flex-col" style={{ height: "calc(100dvh - 56px)" }}>
+
+        {/* Sticky score header */}
+        <div className="bg-gray-900 border-b border-gray-700 px-3 py-2 shrink-0">
+          <div className="flex items-center justify-between mb-2">
+            <button onClick={() => router.push("/admin/dashboard")} className="text-xs text-gray-400">← Dashboard</button>
+            <span className={`text-xs font-bold uppercase ${statusColor}`}>{match.status.replace("_", " ")}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-1">
+              <button onClick={() => handleQuickScore("team1", -1)} disabled={match.score1 === 0}
+                className="w-9 h-9 rounded bg-gray-700 disabled:opacity-30 text-white font-bold text-xl">−</button>
+              <span className="text-white text-3xl font-bold w-10 text-center tabular-nums">{match.score1}</span>
+              <button onClick={() => handleQuickScore("team1", 1)}
+                className="w-9 h-9 rounded bg-green-700 text-white font-bold text-xl">+</button>
+            </div>
+            <div className="text-center flex-1 px-1">
+              <p className="text-gray-400 text-xs truncate">{match.team1}</p>
+              <p className="text-gray-600 text-xs">vs</p>
+              <p className="text-gray-400 text-xs truncate">{match.team2}</p>
+            </div>
+            <div className="flex items-center gap-1 flex-1 justify-end">
+              <button onClick={() => handleQuickScore("team2", -1)} disabled={match.score2 === 0}
+                className="w-9 h-9 rounded bg-gray-700 disabled:opacity-30 text-white font-bold text-xl">−</button>
+              <span className="text-white text-3xl font-bold w-10 text-center tabular-nums">{match.score2}</span>
+              <button onClick={() => handleQuickScore("team2", 1)}
+                className="w-9 h-9 rounded bg-green-700 text-white font-bold text-xl">+</button>
+            </div>
+          </div>
+        </div>
+
+        {/* Tab bar */}
+        <div className="flex bg-gray-900 border-b border-gray-700 shrink-0">
+          {mobileTabs.map((tab) => (
+            <button key={tab} onClick={() => setActiveTab(tab as typeof activeTab)}
+              className={`flex-1 py-3 text-xs font-semibold border-b-2 transition-colors ${activeTab === tab ? "border-blue-500 text-blue-400" : "border-transparent text-gray-500"}`}>
+              {tabLabel[tab]}
+            </button>
+          ))}
+        </div>
+
+        {/* Scrollable tab content */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-3">
+
+          {/* SCORE TAB */}
+          {activeTab === "score" && (
+            <>
+              <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                <p className="text-xs text-gray-400 mb-2">สถานะ</p>
+                <div className="flex gap-2">
+                  {(["upcoming", "live"] as MatchStatus[]).map((s) => (
+                    <button key={s} onClick={() => handleStatusChange(s)}
+                      className={`flex-1 py-3 rounded text-sm font-medium transition-colors ${match.status === s ? (s === "live" ? "bg-red-600 text-white" : "bg-gray-600 text-white") : "bg-gray-900 text-gray-400"}`}>
+                      {s === "upcoming" ? "⏳ Upcoming" : "🔴 Live"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {timerHalf > 0 && (() => {
+                const phase = match.timerPhase ?? "1st";
+                const isRunning = !!match.timerStartedAt;
+                const inExtra = phase === "1st_extra" || phase === "2nd_extra";
+                const totalMin = Math.floor(displaySeconds / 60);
+                const totalSec = Math.floor(displaySeconds % 60);
+                const extraMin = Math.floor(displayExtraSecs / 60);
+                const extraSec = Math.floor(displayExtraSecs % 60);
+                const halfLabel = phase === "1st" || phase === "1st_extra" ? "ครึ่งที่ 1" : "ครึ่งที่ 2";
+                return (
+                  <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                    <p className="text-xs text-gray-400 mb-3">ตัวจับเวลา — ครึ่งละ {timerHalf} นาที</p>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <div className="text-center min-w-[80px]">
+                        <div className="text-4xl font-mono font-bold text-white tabular-nums">
+                          {String(totalMin).padStart(2, "0")}:{String(totalSec).padStart(2, "0")}
+                        </div>
+                        <div className={`text-xs mt-1 font-medium ${phase === "1st" || phase === "1st_extra" ? "text-blue-400" : "text-orange-400"}`}>{halfLabel}</div>
+                      </div>
+                      {inExtra && (
+                        <div className="text-center border-l border-gray-600 pl-3 min-w-[80px]">
+                          <div className="text-2xl font-mono font-bold text-yellow-400 tabular-nums">
+                            +{String(extraMin).padStart(2, "0")}:{String(extraSec).padStart(2, "0")}
+                          </div>
+                          <div className="text-xs mt-1 text-yellow-500">ทดเวลา</div>
+                          <button onClick={match.extraTimeStartedAt ? pauseExtraTime : resumeExtraTime}
+                            className="mt-1 text-xs bg-yellow-700 text-white px-2 py-1 rounded">
+                            {match.extraTimeStartedAt ? "⏸" : "▶"}
+                          </button>
+                        </div>
+                      )}
+                      <div className="flex gap-2 flex-1">
+                        {phase === "2nd_extra" ? (
+                          <span className="flex-1 text-center text-sm text-gray-400 py-2">ครบเวลา</span>
+                        ) : !isRunning ? (
+                          <button onClick={startTimer}
+                            className={`flex-1 text-white rounded px-3 py-3 text-sm font-medium ${phase === "1st_extra" ? "bg-orange-600" : "bg-green-600"}`}>
+                            {phase === "1st_extra" ? "▶ ครึ่งที่ 2" : "▶ Start"}
+                          </button>
+                        ) : (
+                          <button onClick={pauseTimer} className="flex-1 bg-yellow-600 text-white rounded px-3 py-3 text-sm font-medium">⏸ Pause</button>
+                        )}
+                        <button onClick={resetTimer} className="bg-gray-700 text-white rounded px-3 py-3 text-sm">↺</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {match.sport === "volleyball" && (
+                <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                  <p className="text-sm font-semibold mb-3">คะแนนแต่ละเซต</p>
+                  {sets.map((set, i) => (
+                    <div key={i} className="flex items-center gap-2 mb-2">
+                      <span className="text-xs text-gray-400 w-12 shrink-0">เซต {i + 1}</span>
+                      <input type="number" min={0} value={set.s1}
+                        onChange={(e) => setSets(sets.map((s, j) => j === i ? { ...s, s1: Math.max(0, Number(e.target.value)) } : s))}
+                        className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-2 text-white text-center focus:outline-none" />
+                      <span className="text-gray-500">–</span>
+                      <input type="number" min={0} value={set.s2}
+                        onChange={(e) => setSets(sets.map((s, j) => j === i ? { ...s, s2: Math.max(0, Number(e.target.value)) } : s))}
+                        className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-2 text-white text-center focus:outline-none" />
+                      {sets.length > 1 && <button onClick={() => setSets(sets.filter((_, j) => j !== i))} className="text-xs text-red-400">ลบ</button>}
+                    </div>
+                  ))}
+                  <div className="flex gap-2 mt-2">
+                    {sets.length < 5 && <button onClick={() => setSets([...sets, { s1: 0, s2: 0 }])} className="flex-1 bg-gray-700 text-white rounded px-3 py-2 text-sm">+ เซต</button>}
+                    <button onClick={() => handleSaveSets(sets)} className="flex-1 bg-indigo-600 text-white rounded px-3 py-2 text-sm font-medium">💾 บันทึก</button>
+                  </div>
+                </div>
+              )}
+
+              {match.sport === "basketball" && (
+                <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                  <p className="text-sm font-semibold mb-3">คะแนนแต่ละไตรมาส</p>
+                  {quarters.map((q, i) => (
+                    <div key={i} className="flex items-center gap-2 mb-2">
+                      <span className="text-xs text-gray-400 w-12 shrink-0">{i < 4 ? `Q${i + 1}` : `OT${i - 3}`}</span>
+                      <input type="number" min={0} value={q.s1}
+                        onChange={(e) => setQuarters(quarters.map((x, j) => j === i ? { ...x, s1: Math.max(0, Number(e.target.value)) } : x))}
+                        className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-2 text-white text-center focus:outline-none" />
+                      <span className="text-gray-500">–</span>
+                      <input type="number" min={0} value={q.s2}
+                        onChange={(e) => setQuarters(quarters.map((x, j) => j === i ? { ...x, s2: Math.max(0, Number(e.target.value)) } : x))}
+                        className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-2 text-white text-center focus:outline-none" />
+                    </div>
+                  ))}
+                  <div className="flex gap-2 mt-2">
+                    {quarters.length < 6 && <button onClick={() => setQuarters([...quarters, { s1: 0, s2: 0 }])} className="flex-1 bg-gray-700 text-white rounded px-3 py-2 text-sm">+ OT</button>}
+                    <button onClick={() => handleSaveQuarters(quarters)} className="flex-1 bg-indigo-600 text-white rounded px-3 py-2 text-sm font-medium">💾 บันทึก</button>
+                  </div>
+                </div>
+              )}
+
+              <button onClick={async () => { await recalculateMatchScore(id); if (match) recalculateStandings(match.tournamentId); }}
+                className="w-full text-xs text-gray-400 bg-gray-800 border border-gray-700 px-3 py-2 rounded">
+                🔄 คำนวณสกอร์ใหม่จาก Events
+              </button>
+            </>
+          )}
+
+          {/* EVENTS TAB */}
+          {activeTab === "events" && isFootball && (
+            <>
+              <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                <div className="grid grid-cols-4 gap-2 mb-3">
+                  {EVENT_BUTTONS.map((btn) => (
+                    <button key={btn.type} onClick={() => { setActiveType(btn.type); setIsStaff(false); }}
+                      className={`py-3 rounded text-xs font-medium transition-colors ${activeType === btn.type ? btn.color + " text-white" : "bg-gray-900 text-gray-400"}`}>
+                      {EVENT_META[btn.type].icon}<br />{EVENT_META[btn.type].label}
+                    </button>
+                  ))}
+                </div>
+                <form onSubmit={handleAddEvent} className="flex flex-col gap-3">
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setActiveTeam("team1")}
+                      className={`flex-1 py-3 rounded text-sm font-medium ${activeTeam === "team1" ? "bg-blue-600 text-white" : "bg-gray-900 text-gray-400"}`}>
+                      {match.team1}
+                    </button>
+                    <button type="button" onClick={() => setActiveTeam("team2")}
+                      className={`flex-1 py-3 rounded text-sm font-medium ${activeTeam === "team2" ? "bg-blue-600 text-white" : "bg-gray-900 text-gray-400"}`}>
+                      {match.team2}
+                    </button>
+                  </div>
+                  {isCardType && (
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setIsStaff(false)}
+                        className={`flex-1 py-2 rounded text-xs font-medium ${!isStaff ? "bg-blue-600 text-white" : "bg-gray-900 text-gray-400"}`}>นักเตะ</button>
+                      <button type="button" onClick={() => { setIsStaff(true); setJerseyNumber(""); }}
+                        className={`flex-1 py-2 rounded text-xs font-medium ${isStaff ? "bg-amber-600 text-white" : "bg-gray-900 text-gray-400"}`}>โค้ช / ทีมงาน</button>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <input
+                      placeholder={isStaff ? "ชื่อโค้ช" : activeType === "substitution" ? "นักเตะ (in)" : activeType === "own_goal" ? "นักเตะ (ผู้ทำเข้าตัวเอง)" : "ชื่อนักเตะ"}
+                      value={player} onChange={(e) => setPlayer(e.target.value)}
+                      className="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-3 text-sm text-white focus:outline-none focus:border-blue-500" />
+                    {!isStaff && (
+                      <input type="number" min={1} max={99} value={jerseyNumber} onChange={(e) => setJerseyNumber(e.target.value)}
+                        placeholder="เบอร์"
+                        className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-3 text-sm text-white text-center focus:outline-none" />
+                    )}
+                    <input type="text" value={minute} onChange={(e) => setMinute(e.target.value)} placeholder="นาที"
+                      className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-3 text-sm text-white text-center focus:outline-none" />
+                    {timerHalf > 0 && (
+                      <button type="button" onClick={() => setMinute(String(Math.floor(displaySeconds / 60) + 1))}
+                        className="bg-gray-700 text-white px-2 py-3 rounded text-sm">⏱</button>
+                    )}
+                  </div>
+                  {activeType === "substitution" && (
+                    <div className="flex gap-2">
+                      <input placeholder="นักเตะ (out)" value={playerOut} onChange={(e) => setPlayerOut(e.target.value)}
+                        className="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-3 text-sm text-white focus:outline-none" />
+                      <input type="number" min={1} max={99} value={jerseyNumberOut} onChange={(e) => setJerseyNumberOut(e.target.value)}
+                        placeholder="เบอร์"
+                        className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-3 text-sm text-white text-center focus:outline-none" />
+                    </div>
+                  )}
+                  <button type="submit" disabled={adding}
+                    className="bg-blue-600 disabled:opacity-50 text-white rounded px-4 py-3 text-sm font-medium">
+                    {adding ? "กำลังเพิ่ม..." : `เพิ่ม ${eventLabel(activeType)}`}
+                  </button>
+                </form>
+              </div>
+              {events.length > 0 && (
+                <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                  <p className="text-sm font-semibold mb-3">เหตุการณ์ ({events.length})</p>
+                  <div className="flex flex-col gap-2">
+                    {[...events].reverse().map((ev) => (
+                      <div key={ev.id} className="flex items-center justify-between bg-gray-900 rounded px-3 py-2">
+                        <div className="text-sm min-w-0">
+                          <span className="text-gray-400">{ev.minute}&apos; </span>
+                          <span className="text-white">{eventLabel(ev.type)} – {ev.jerseyNumber ? `#${ev.jerseyNumber} ` : ""}{ev.player}</span>
+                          {ev.playerOut && <span className="text-gray-400"> / out {ev.jerseyNumberOut ? `#${ev.jerseyNumberOut} ` : ""}{ev.playerOut}</span>}
+                          <span className="text-gray-500 text-xs ml-1">({ev.team === "team1" ? match.team1 : match.team2})</span>
+                        </div>
+                        <button onClick={async () => {
+                          await deleteEvent(id, ev.id);
+                          if ((ev.type === "goal" || ev.type === "penalty_goal" || ev.type === "own_goal") && match) {
+                            await recalculateMatchScore(id); recalculateStandings(match.tournamentId);
+                          }
+                        }} className="text-xs text-red-400 ml-2 shrink-0">ลบ</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* STATS TAB */}
+          {activeTab === "stats" && isFootball && (
+            <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+              <p className="text-sm font-semibold mb-1">Match Stats</p>
+              <div className="flex justify-between text-xs text-gray-400 mb-3">
+                <span>{match.team1}</span><span>{match.team2}</span>
+              </div>
+              <div className="space-y-2">
+                {[
+                  { label: "Shots", v1: shots1, v2: shots2, s1: setShots1, s2: setShots2 },
+                  { label: "On Target", v1: onTarget1, v2: onTarget2, s1: setOnTarget1, s2: setOnTarget2 },
+                  { label: "Corners", v1: corners1, v2: corners2, s1: setCorners1, s2: setCorners2 },
+                  { label: "Fouls", v1: fouls1, v2: fouls2, s1: setFouls1, s2: setFouls2 },
+                  { label: "Offsides", v1: offsides1, v2: offsides2, s1: setOffsides1, s2: setOffsides2 },
+                ].map(({ label, v1, v2, s1, s2 }) => (
+                  <div key={label} className="flex items-center gap-2">
+                    <input type="number" min={0} value={v1} onChange={(e) => s1(Number(e.target.value))}
+                      className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-2 text-white text-center focus:outline-none" />
+                    <span className="flex-1 text-center text-xs text-gray-500">{label}</span>
+                    <input type="number" min={0} value={v2} onChange={(e) => s2(Number(e.target.value))}
+                      className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-2 text-white text-center focus:outline-none" />
+                  </div>
+                ))}
+                {[
+                  { label: "Yellow Cards", type: "yellow_card", color: "text-yellow-400" },
+                  { label: "Red Cards", type: "red_card", color: "text-red-400" },
+                ].map(({ label, type, color }) => {
+                  const c1 = events.filter(e => e.type === type && e.team === "team1").length;
+                  const c2 = events.filter(e => e.type === type && e.team === "team2").length;
+                  return (
+                    <div key={type} className="flex items-center gap-2">
+                      <div className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-2 text-white text-center text-sm">{c1}</div>
+                      <span className={`flex-1 text-center text-xs ${color}`}>{label}</span>
+                      <div className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-2 text-white text-center text-sm">{c2}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <button onClick={handleSaveStats} disabled={savingStats}
+                className="w-full mt-3 bg-indigo-600 disabled:opacity-50 text-white rounded px-4 py-3 text-sm font-medium">
+                {savingStats ? "กำลังบันทึก..." : "💾 บันทึก Stats"}
+              </button>
+            </div>
+          )}
+
+          {/* FINISH TAB */}
+          {activeTab === "finish" && (
+            <>
+              <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                <p className="text-xs text-gray-400 mb-3">กรอกสกอร์ตรงๆ — ไม่ผ่าน Events</p>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="flex flex-col items-center flex-1 gap-1">
+                    <span className="text-xs text-gray-400">{match.team1}</span>
+                    <input type="number" min={0} value={directScore1} onChange={(e) => setDirectScore1(Math.max(0, Number(e.target.value)))}
+                      className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-3 text-white text-xl font-bold text-center focus:outline-none" />
+                  </div>
+                  <span className="text-gray-500 font-bold text-xl mt-4">–</span>
+                  <div className="flex flex-col items-center flex-1 gap-1">
+                    <span className="text-xs text-gray-400">{match.team2}</span>
+                    <input type="number" min={0} value={directScore2} onChange={(e) => setDirectScore2(Math.max(0, Number(e.target.value)))}
+                      className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-3 text-white text-xl font-bold text-center focus:outline-none" />
+                  </div>
+                </div>
+                <button onClick={handleSaveDirectScore} disabled={savingScore}
+                  className="w-full bg-indigo-600 disabled:opacity-50 text-white rounded px-4 py-3 text-sm font-medium">
+                  {savingScore ? "..." : "💾 Save Score"}
+                </button>
+              </div>
+              <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+                <p className="text-sm font-semibold mb-3">จบแมตช์ + คำนวณ Standings</p>
+                {isFootball && (
+                  <>
+                    <div className="flex gap-2 mb-3">
+                      <button onClick={() => setResultType("normal")}
+                        className={`flex-1 py-3 rounded text-sm font-medium ${resultType === "normal" ? "bg-green-700 text-white" : "bg-gray-900 text-gray-400"}`}>
+                        ✅ ปกติ (90 นาที)
+                      </button>
+                      <button onClick={() => setResultType("penalty")}
+                        className={`flex-1 py-3 rounded text-sm font-medium ${resultType === "penalty" ? "bg-orange-600 text-white" : "bg-gray-900 text-gray-400"}`}>
+                        🔫 Penalty
+                      </button>
+                    </div>
+                    {resultType === "penalty" && (
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="flex flex-col items-center flex-1">
+                          <span className="text-xs text-gray-400 mb-1">{match.team1}</span>
+                          <input type="number" min={0} value={penalty1} onChange={(e) => setPenalty1(Number(e.target.value))}
+                            className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-3 text-white text-xl font-bold text-center focus:outline-none" />
+                        </div>
+                        <span className="text-gray-500 font-bold text-lg mt-4">–</span>
+                        <div className="flex flex-col items-center flex-1">
+                          <span className="text-xs text-gray-400 mb-1">{match.team2}</span>
+                          <input type="number" min={0} value={penalty2} onChange={(e) => setPenalty2(Number(e.target.value))}
+                            className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-3 text-white text-xl font-bold text-center focus:outline-none" />
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+                <button onClick={handleFinalize} disabled={calculating}
+                  className="w-full bg-green-600 disabled:opacity-50 text-white rounded px-4 py-3 text-sm font-bold">
+                  {calculating ? "กำลังคำนวณ..." : "✅ Full Time + คำนวณ Standings"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ── DESKTOP ── */}
+      <div className="hidden md:block max-w-2xl mx-auto">
+        <button onClick={() => router.push("/admin/dashboard")} className="text-sm text-gray-400 hover:text-white mb-4 inline-block">
+          ← กลับ Dashboard
+        </button>
 
       {/* Match Header */}
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-5 mb-4">
@@ -787,6 +1154,7 @@ export default function LiveMatchPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
