@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { subscribeMatch, subscribeEvents, getTeams, buildLogoMap } from "@/lib/firestore";
+import { subscribeMatch, subscribeTournament, subscribeEvents, getTeams, buildLogoMap } from "@/lib/firestore";
 import { EVENT_META, eventLabel } from "@/lib/events";
 import type { Match, MatchEvent, SetScore, QuarterScore } from "@/types";
 
@@ -47,6 +47,7 @@ function EventRow({ event, match }: { event: MatchEvent; match: Match }) {
 export default function MatchDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [match, setMatch] = useState<Match | null>(null);
+  const [timerHalf, setTimerHalf] = useState(0);
   const [events, setEvents] = useState<MatchEvent[]>([]);
   const [logoMap, setLogoMap] = useState<Record<string, string>>({});
   const [displaySeconds, setDisplaySeconds] = useState(0);
@@ -63,6 +64,15 @@ export default function MatchDetailPage() {
   useEffect(() => {
     if (!match?.tournamentId) return;
     getTeams(match.tournamentId).then((teams) => setLogoMap(buildLogoMap(teams)));
+  }, [match?.tournamentId]);
+
+  useEffect(() => {
+    setTimerHalf(0);
+    if (!match?.tournamentId) return;
+
+    return subscribeTournament(match.tournamentId, (tournament) => {
+      setTimerHalf(tournament?.halfDuration ?? 0);
+    });
   }, [match?.tournamentId]);
 
   useEffect(() => {
@@ -154,7 +164,7 @@ export default function MatchDetailPage() {
           </div>
         </div>
 
-        {match.status === "live" && (match.halfDuration ?? 0) > 0 && (!!match.timerStartedAt || (match.timerElapsed ?? 0) > 0) && (() => {
+        {match.status === "live" && timerHalf > 0 && (!!match.timerStartedAt || (match.timerElapsed ?? 0) > 0) && (() => {
           const phase = match.timerPhase ?? "1st";
           const isHalfTime = phase === "1st_extra" && !match.extraTimeStartedAt;
           const totalMin = Math.floor(displaySeconds / 60);

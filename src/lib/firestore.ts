@@ -349,3 +349,15 @@ export async function recalculateStandings(tournamentId: string): Promise<void> 
 
   await Promise.all([...writes, ...deletes]);
 }
+export function subscribeTournament(
+  id: string,
+  callback: (tournament: Tournament | null) => void
+): Unsubscribe {
+  return onSnapshot(doc(db, "tournaments", id), (snap) => {
+    callback(
+      snap.exists()
+        ? ({ id: snap.id, ...snap.data() } as Tournament)
+        : null
+    );
+  });
+}

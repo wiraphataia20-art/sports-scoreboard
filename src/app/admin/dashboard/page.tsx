@@ -145,7 +145,6 @@ export default function AdminDashboard() {
         score1: 0, score2: 0,
         status: "upcoming",
         date: mDate, time: mTime, field: mField, round: mRound,
-        ...(tournament.halfDuration ? { halfDuration: tournament.halfDuration } : {}),
       });
       setMTeam1Id(""); setMTeam2Id(""); setMDate(""); setMTime(""); setMField(""); setMRound("");
     } catch (err) {

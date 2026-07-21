@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { subscribeMatch, updateMatch, subscribeEvents, addEvent, deleteEvent, recalculateStandings, recalculateMatchScore } from "@/lib/firestore";
+import { subscribeMatch, subscribeTournament, updateMatch, subscribeEvents, addEvent, deleteEvent, recalculateStandings, recalculateMatchScore } from "@/lib/firestore";
 import type { Match, MatchEvent, MatchStatus, EventType, ResultType, SetScore, QuarterScore } from "@/types";
 import { EVENT_META, eventLabel } from "@/lib/events";
 import { useRouter, useParams } from "next/navigation";
@@ -22,6 +22,7 @@ export default function LiveMatchPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
   const [match, setMatch] = useState<Match | null>(null);
+  const [timerHalf, setTimerHalf] = useState(0);
   const [events, setEvents] = useState<MatchEvent[]>([]);
   const [calculating, setCalculating] = useState(false);
   const statsInitialized = useRef(false);
@@ -80,7 +81,7 @@ export default function LiveMatchPage() {
 
   useEffect(() => {
     if (!match) return;
-    const half = (match.halfDuration ?? 0) * 60;
+    const half = timerHalf * 60;
 
     // Extra time interval
     if (match.extraTimeStartedAt || (match.extraTimeElapsed ?? 0) > 0) {
@@ -123,7 +124,15 @@ export default function LiveMatchPage() {
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [match?.timerStartedAt, match?.timerElapsed, match?.extraTimeStartedAt]);
+  }, [
+    id,
+    match?.timerStartedAt,
+    match?.timerElapsed,
+    match?.timerPhase,
+    match?.extraTimeStartedAt,
+    match?.extraTimeElapsed,
+    timerHalf,
+  ]);
 
   async function startTimer() {
     if (!match) return;
@@ -207,6 +216,15 @@ export default function LiveMatchPage() {
       }
     });
   }, [id]);
+
+  useEffect(() => {
+    setTimerHalf(0);
+    if (!match?.tournamentId) return;
+
+    return subscribeTournament(match.tournamentId, (tournament) => {
+      setTimerHalf(tournament?.halfDuration ?? 0);
+    });
+  }, [match?.tournamentId]);
 
   useEffect(() => {
     const unsub = subscribeEvents(id, setEvents);
@@ -340,7 +358,6 @@ export default function LiveMatchPage() {
 
   const statusColor = match.status === "live" ? "text-red-400" : match.status === "full_time" ? "text-green-400" : "text-gray-400";
   const isFootball = match.sport === "football" || match.sport === "futsal";
-  const timerHalf = match.halfDuration ?? 0;
 
   const mobileTabs = ["score", ...(isFootball ? ["events", "stats"] : []), "finish"] as const;
   const tabLabel: Record<string, string> = { score: "⏱ Score", events: "⚽ Events", stats: "📊 Stats", finish: "✅ Finish" };
@@ -896,8 +913,8 @@ export default function LiveMatchPage() {
       )}
 
       {/* Timer */}
-      {(match.halfDuration ?? 0) > 0 && (() => {
-        const half = match.halfDuration!;
+      {timerHalf > 0 && (() => {
+        const half = timerHalf;
         const totalMin = Math.floor(displaySeconds / 60);
         const totalSec = Math.floor(displaySeconds % 60);
         const phase = match.timerPhase ?? "1st";
@@ -1023,7 +1040,7 @@ export default function LiveMatchPage() {
             <input type="text" value={minute} onChange={(e) => setMinute(e.target.value)}
               placeholder="90+1"
               className="w-20 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
-            {(match.halfDuration ?? 0) > 0 && (
+            {timerHalf > 0 && (
               <button type="button" title="ใช้นาทีปัจจุบัน"
                 onClick={() => setMinute(String(Math.floor(displaySeconds / 60) + 1))}
                 className="bg-gray-700 hover:bg-gray-600 text-white px-2 py-2 rounded text-sm transition-colors">
