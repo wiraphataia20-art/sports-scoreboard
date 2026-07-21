@@ -18,6 +18,14 @@ const sportLabels: Record<string, string> = {
 export default function MatchCard({ match, logoMap }: { match: Match; logoMap?: Record<string, string> }) {
   const status = statusConfig[match.status];
   const hasPenalty = match.penalty1 !== undefined && match.penalty2 !== undefined;
+  const isPostponed = match.status === "upcoming" && match.scheduleStatus === "postponed";
+  const isRescheduled = match.status === "upcoming" && match.scheduleStatus === "rescheduled";
+  const statusLabel = isPostponed ? "Postponed" : isRescheduled ? "Rescheduled" : status.label;
+  const statusClassName = isPostponed
+    ? "bg-amber-700 text-white"
+    : isRescheduled
+      ? "bg-blue-700 text-white"
+      : status.className;
 
   return (
     <Link href={`/match/${match.id}`} className="block">
@@ -32,8 +40,8 @@ export default function MatchCard({ match, logoMap }: { match: Match; logoMap?: 
             )}
             <span className="text-xs text-gray-400">{match.round}</span>
           </div>
-          <span className={`text-xs font-semibold px-2.5 py-1 rounded ${status.className}`}>
-            {status.label}
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded ${statusClassName}`}>
+            {statusLabel}
           </span>
         </div>
 
@@ -64,10 +72,19 @@ export default function MatchCard({ match, logoMap }: { match: Match; logoMap?: 
           </div>
         </div>
 
-        <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
+        <div className="flex items-center justify-between gap-3 mt-3 text-xs text-gray-500">
           <span>Field: {match.field}</span>
-          <span>Time: {match.time}</span>
+          {isPostponed ? (
+            <span className="text-amber-400 text-right">รอกำหนดวันและเวลาใหม่</span>
+          ) : (
+            <span className={isRescheduled ? "text-blue-400" : ""}>
+              {isRescheduled ? `กำหนดใหม่: ${match.date} ${match.time}` : `Time: ${match.time}`}
+            </span>
+          )}
         </div>
+        {match.status === "upcoming" && match.scheduleNote && (isPostponed || isRescheduled) && (
+          <p className="mt-2 text-xs text-gray-400 border-t border-gray-700 pt-2">หมายเหตุ: {match.scheduleNote}</p>
+        )}
       </div>
     </Link>
   );

@@ -144,6 +144,7 @@ export default function AdminDashboard() {
         ...(group ? { group } : {}),
         score1: 0, score2: 0,
         status: "upcoming",
+        scheduleStatus: "scheduled",
         date: mDate, time: mTime, field: mField, round: mRound,
       });
       setMTeam1Id(""); setMTeam2Id(""); setMDate(""); setMTime(""); setMField(""); setMRound("");
@@ -444,7 +445,17 @@ export default function AdminDashboard() {
                     : m.group && <span className="text-xs bg-blue-900 text-blue-300 px-2 py-0.5 rounded">สาย {m.group}</span>
                   }
                   <span className="text-white text-sm font-medium">{m.team1} vs {m.team2}</span>
-                  <span className="text-gray-500 text-xs">{m.date} {m.time} · {m.round}</span>
+                  <span className="text-gray-500 text-xs">
+                    {m.status === "upcoming" && m.scheduleStatus === "postponed"
+                      ? `กำหนดเดิม ${m.originalDate ?? m.date} ${m.originalTime ?? m.time}`
+                      : `${m.date} ${m.time}`} · {m.round}
+                  </span>
+                  {m.status === "upcoming" && m.scheduleStatus === "postponed" && (
+                    <span className="text-xs bg-amber-900 text-amber-300 px-2 py-0.5 rounded">เลื่อนการแข่งขัน</span>
+                  )}
+                  {m.status === "upcoming" && m.scheduleStatus === "rescheduled" && (
+                    <span className="text-xs bg-blue-900 text-blue-300 px-2 py-0.5 rounded">กำหนดใหม่</span>
+                  )}
                   <span className={`text-xs px-2 py-0.5 rounded ${
                     m.status === "live" ? "bg-red-900 text-red-300" :
                     m.status === "full_time" ? "bg-green-900 text-green-300" :

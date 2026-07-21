@@ -78,7 +78,12 @@ export default function HomePage() {
   const logoMap = useMemo(() => buildLogoMap(teams), [teams]);
 
   const liveMatches = matches.filter((m) => m.status === "live");
-  const otherMatches = matches.filter((m) => m.status !== "live");
+  const postponedMatches = matches.filter(
+    (m) => m.status === "upcoming" && m.scheduleStatus === "postponed"
+  );
+  const otherMatches = matches.filter(
+    (m) => m.status !== "live" && !(m.status === "upcoming" && m.scheduleStatus === "postponed")
+  );
   const matchesByDate = otherMatches.reduce<Record<string, Match[]>>((acc, m) => {
     acc[m.date] = acc[m.date] ? [...acc[m.date], m] : [m];
     return acc;
@@ -135,6 +140,19 @@ export default function HomePage() {
               </h2>
               <div className="flex flex-col gap-3">
                 {liveMatches.map((m) => (
+                  <MatchCard key={m.id} match={m} logoMap={logoMap} />
+                ))}
+              </div>
+            </div>
+          )}
+          {postponedMatches.length > 0 && (
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-amber-400 mb-3 flex items-center gap-2">
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500" />
+                เลื่อนการแข่งขัน
+              </h2>
+              <div className="flex flex-col gap-3">
+                {postponedMatches.map((m) => (
                   <MatchCard key={m.id} match={m} logoMap={logoMap} />
                 ))}
               </div>

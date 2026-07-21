@@ -4,7 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { subscribeMatch, subscribeTournament, updateMatch, subscribeEvents, addEvent, deleteEvent, recalculateStandings, recalculateMatchScore } from "@/lib/firestore";
-import type { Match, MatchEvent, MatchStatus, EventType, ResultType, SetScore, QuarterScore } from "@/types";
+import type { Match, MatchEvent, MatchStatus, ScheduleStatus, EventType, ResultType, SetScore, QuarterScore } from "@/types";
 import { EVENT_META, eventLabel } from "@/lib/events";
 import { useRouter, useParams } from "next/navigation";
 
@@ -18,6 +18,103 @@ const EVENT_BUTTONS: { type: EventType; color: string }[] = [
   { type: "substitution", color: "bg-purple-600 hover:bg-purple-700" },
 ];
 
+interface ScheduleEditorProps {
+  mode: ScheduleStatus;
+  date: string;
+  time: string;
+  note: string;
+  saving: boolean;
+  onModeChange: (mode: ScheduleStatus) => void;
+  onDateChange: (value: string) => void;
+  onTimeChange: (value: string) => void;
+  onNoteChange: (value: string) => void;
+  onSave: () => void;
+}
+
+function ScheduleEditor({
+  mode,
+  date,
+  time,
+  note,
+  saving,
+  onModeChange,
+  onDateChange,
+  onTimeChange,
+  onNoteChange,
+  onSave,
+}: ScheduleEditorProps) {
+  const options: { value: ScheduleStatus; label: string; activeClass: string }[] = [
+    { value: "scheduled", label: "ตามกำหนด", activeClass: "bg-gray-600 text-white" },
+    { value: "rescheduled", label: "มีวันเวลาใหม่", activeClass: "bg-blue-600 text-white" },
+    { value: "postponed", label: "ยังไม่มีกำหนด", activeClass: "bg-amber-600 text-white" },
+  ];
+
+  return (
+    <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 mb-4">
+      <p className="text-sm font-semibold mb-1">จัดการกำหนดการแข่งขัน</p>
+      <p className="text-xs text-gray-500 mb-3">ใช้เมื่อมีการเปลี่ยนวัน เวลา หรือเลื่อนการแข่งขัน</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onModeChange(option.value)}
+            className={`rounded px-3 py-2 text-xs font-medium transition-colors ${
+              mode === option.value ? option.activeClass : "bg-gray-900 text-gray-400 hover:bg-gray-700"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
+      {mode !== "postponed" ? (
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div>
+            <label className="text-xs text-gray-400 mb-1 block">วันที่แข่งขัน</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(event) => onDateChange(event.target.value)}
+              className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 mb-1 block">เวลาแข่งขัน</label>
+            <input
+              type="time"
+              value={time}
+              onChange={(event) => onTimeChange(event.target.value)}
+              className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="rounded border border-amber-900 bg-amber-950/40 px-3 py-2 mb-3 text-xs text-amber-300">
+          หน้าเว็บจะแสดงว่า “รอกำหนดวันและเวลาใหม่” และนำแมตช์ออกจากตารางวันเดิม
+        </div>
+      )}
+
+      <label className="text-xs text-gray-400 mb-1 block">หมายเหตุหรือเหตุผล (ไม่บังคับ)</label>
+      <textarea
+        value={note}
+        onChange={(event) => onNoteChange(event.target.value)}
+        rows={2}
+        placeholder="เช่น ฝนตกหนัก หรือสนามไม่พร้อม"
+        className="w-full resize-none bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+      />
+      <button
+        type="button"
+        onClick={onSave}
+        disabled={saving}
+        className="mt-3 w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded px-4 py-2 text-sm font-medium transition-colors"
+      >
+        {saving ? "กำลังบันทึก..." : "บันทึกกำหนดการแข่งขัน"}
+      </button>
+    </div>
+  );
+}
+
 export default function LiveMatchPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
@@ -26,6 +123,7 @@ export default function LiveMatchPage() {
   const [events, setEvents] = useState<MatchEvent[]>([]);
   const [calculating, setCalculating] = useState(false);
   const statsInitialized = useRef(false);
+  const scheduleInitialized = useRef(false);
 
   const [activeType, setActiveType] = useState<EventType>("goal");
   const [activeTeam, setActiveTeam] = useState<"team1" | "team2">("team1");
@@ -59,6 +157,11 @@ export default function LiveMatchPage() {
   const [directScore2, setDirectScore2] = useState(0);
   const [savingScore, setSavingScore] = useState(false);
   const [activeTab, setActiveTab] = useState<"score" | "events" | "stats" | "finish">("score");
+  const [scheduleMode, setScheduleMode] = useState<ScheduleStatus>("scheduled");
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [scheduleNote, setScheduleNote] = useState("");
+  const [savingSchedule, setSavingSchedule] = useState(false);
 
   // Volleyball sets
   const [sets, setSets] = useState<SetScore[]>([{ s1: 0, s2: 0 }]);
@@ -190,6 +293,7 @@ export default function LiveMatchPage() {
 
   useEffect(() => {
     statsInitialized.current = false;
+    scheduleInitialized.current = false;
     return subscribeMatch(id, (m) => {
       if (!m) return;
       setMatch(m);
@@ -214,6 +318,13 @@ export default function LiveMatchPage() {
         if (m.sets && m.sets.length > 0) setSets(m.sets);
         if (m.quarters && m.quarters.length > 0) setQuarters(m.quarters);
       }
+      if (!scheduleInitialized.current) {
+        scheduleInitialized.current = true;
+        setScheduleMode(m.scheduleStatus ?? "scheduled");
+        setScheduleDate(m.date);
+        setScheduleTime(m.time);
+        setScheduleNote(m.scheduleNote ?? "");
+      }
     });
   }, [id]);
 
@@ -232,10 +343,49 @@ export default function LiveMatchPage() {
   }, [id]);
 
   async function handleStatusChange(status: MatchStatus) {
+    if (status === "live" && match?.scheduleStatus === "postponed") {
+      alert("กรุณากำหนดวันและเวลาใหม่ก่อนเริ่มการแข่งขัน");
+      return;
+    }
     await updateMatch(id, { status });
     setMatch((prev) => prev ? { ...prev, status } : prev);
     if (match && status === "live") {
       recalculateStandings(match.tournamentId);
+    }
+  }
+
+  async function handleSaveSchedule() {
+    if (!match) return;
+    if (scheduleMode !== "postponed" && (!scheduleDate || !scheduleTime)) {
+      alert("กรุณาระบุวันและเวลาแข่งขัน");
+      return;
+    }
+
+    setSavingSchedule(true);
+    try {
+      const changes: Partial<Match> = {
+        scheduleStatus: scheduleMode,
+        scheduleNote: scheduleNote.trim(),
+        scheduleUpdatedAt: Date.now(),
+      };
+
+      if (scheduleMode !== "postponed") {
+        changes.date = scheduleDate;
+        changes.time = scheduleTime;
+      }
+
+      if (scheduleMode === "rescheduled" || scheduleMode === "postponed") {
+        changes.originalDate = match.originalDate ?? match.date;
+        changes.originalTime = match.originalTime ?? match.time;
+      }
+
+      await updateMatch(id, changes);
+      setMatch((previous) => previous ? { ...previous, ...changes } : previous);
+      alert("บันทึกกำหนดการแข่งขันเรียบร้อย");
+    } catch (error) {
+      alert("บันทึกกำหนดการแข่งขันไม่สำเร็จ: " + String(error));
+    } finally {
+      setSavingSchedule(false);
     }
   }
 
@@ -423,6 +573,21 @@ export default function LiveMatchPage() {
                   ))}
                 </div>
               </div>
+
+              {match.status === "upcoming" && (
+                <ScheduleEditor
+                  mode={scheduleMode}
+                  date={scheduleDate}
+                  time={scheduleTime}
+                  note={scheduleNote}
+                  saving={savingSchedule}
+                  onModeChange={setScheduleMode}
+                  onDateChange={setScheduleDate}
+                  onTimeChange={setScheduleTime}
+                  onNoteChange={setScheduleNote}
+                  onSave={handleSaveSchedule}
+                />
+              )}
 
               {timerHalf > 0 && (() => {
                 const phase = match.timerPhase ?? "1st";
@@ -794,6 +959,21 @@ export default function LiveMatchPage() {
           ))}
         </div>
       </div>
+
+      {match.status === "upcoming" && (
+        <ScheduleEditor
+          mode={scheduleMode}
+          date={scheduleDate}
+          time={scheduleTime}
+          note={scheduleNote}
+          saving={savingSchedule}
+          onModeChange={setScheduleMode}
+          onDateChange={setScheduleDate}
+          onTimeChange={setScheduleTime}
+          onNoteChange={setScheduleNote}
+          onSave={handleSaveSchedule}
+        />
+      )}
 
       {/* Direct Score */}
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 mb-4">

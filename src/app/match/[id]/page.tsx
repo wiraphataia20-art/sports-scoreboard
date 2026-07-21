@@ -111,6 +111,18 @@ export default function MatchDetailPage() {
   if (!match) return <p className="text-gray-500">กำลังโหลด...</p>;
 
   const hasPenalty = match.penalty1 !== undefined && match.penalty2 !== undefined;
+  const isPostponed = match.status === "upcoming" && match.scheduleStatus === "postponed";
+  const isRescheduled = match.status === "upcoming" && match.scheduleStatus === "rescheduled";
+  const statusClassName = isPostponed
+    ? "bg-amber-700 text-white"
+    : isRescheduled
+      ? "bg-blue-700 text-white"
+      : STATUS_BADGE[match.status];
+  const statusLabel = isPostponed
+    ? "Postponed"
+    : isRescheduled
+      ? "Rescheduled"
+      : STATUS_LABEL[match.status];
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -122,8 +134,8 @@ export default function MatchDetailPage() {
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 mb-4">
         <div className="flex items-center justify-between mb-4">
           <span className="text-xs text-gray-400">{match.round}</span>
-          <span className={`text-xs font-semibold px-2.5 py-1 rounded ${STATUS_BADGE[match.status]}`}>
-            {STATUS_LABEL[match.status]}
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded ${statusClassName}`}>
+            {statusLabel}
           </span>
         </div>
 
@@ -203,11 +215,32 @@ export default function MatchDetailPage() {
             </div>
           );
         })()}
-        <div className="flex justify-center gap-6 mt-4 text-xs text-gray-500">
-          <span>{match.date}</span>
-          <span>{match.time}</span>
-          <span>{match.field}</span>
-        </div>
+        {isPostponed ? (
+          <div className="mt-4 rounded border border-amber-800 bg-amber-950/50 p-3 text-center">
+            <p className="text-sm font-semibold text-amber-300">เลื่อนการแข่งขัน — รอกำหนดวันและเวลาใหม่</p>
+            <p className="mt-1 text-xs text-gray-400">
+              กำหนดเดิม: {match.originalDate ?? match.date} {match.originalTime ?? match.time} · {match.field}
+            </p>
+            {match.scheduleNote && <p className="mt-1 text-xs text-gray-300">หมายเหตุ: {match.scheduleNote}</p>}
+          </div>
+        ) : (
+          <>
+            <div className="flex justify-center gap-6 mt-4 text-xs text-gray-500">
+              <span className={isRescheduled ? "text-blue-400" : ""}>{match.date}</span>
+              <span className={isRescheduled ? "text-blue-400" : ""}>{match.time}</span>
+              <span>{match.field}</span>
+            </div>
+            {isRescheduled && (
+              <div className="mt-3 rounded border border-blue-900 bg-blue-950/40 p-2 text-center text-xs">
+                <p className="font-semibold text-blue-300">กำหนดการแข่งขันใหม่</p>
+                {(match.originalDate || match.originalTime) && (
+                  <p className="mt-1 text-gray-400">กำหนดเดิม: {match.originalDate} {match.originalTime}</p>
+                )}
+                {match.scheduleNote && <p className="mt-1 text-gray-300">หมายเหตุ: {match.scheduleNote}</p>}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Volleyball Sets */}

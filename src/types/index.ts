@@ -5,6 +5,8 @@ export interface QuarterScore { s1: number; s2: number; }
 
 export type MatchStatus = "upcoming" | "live" | "full_time";
 
+export type ScheduleStatus = "scheduled" | "postponed" | "rescheduled";
+
 export type EventType = "goal" | "penalty_goal" | "penalty_miss" | "own_goal" | "yellow_card" | "red_card" | "substitution";
 
 export type ResultType = "normal" | "penalty";
@@ -45,6 +47,11 @@ export interface Match {
   group?: string;
   date: string;
   time: string;
+  scheduleStatus?: ScheduleStatus;
+  originalDate?: string;
+  originalTime?: string;
+  scheduleNote?: string;
+  scheduleUpdatedAt?: number;
   field: string;
   round: string;
   // Timer
